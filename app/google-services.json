@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "361178620737",
+    "firebase_url": "https://gold-silver-live-calc-default-rtdb.firebaseio.com",
+    "project_id": "gold-silver-live-calc",
+    "storage_bucket": "gold-silver-live-calc.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:361178620737:android:ac29234f20b24dc22d37c0",
+        "android_client_info": {
+          "package_name": "com.goldsilver.livecalc"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAl5rTNe5hI6YR9N8Ea9axqQLM24P1YQUU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

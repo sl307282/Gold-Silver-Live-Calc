@@ -1,0 +1,13 @@
+{
+  "name": "firestore-sync",
+  "version": "1.0.0",
+  "description": "Syncs gold and silver rates from GoldAPI.io to Cloud Firestore",
+  "main": "syncRates.js",
+  "scripts": {
+    "start": "node syncRates.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.2",
+    "firebase-admin": "^12.1.1"
+  }
+}

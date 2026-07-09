@@ -1,0 +1,25 @@
+# Android Gradle build files
+.gradle/
+build/
+
+# Local configuration file (contains local paths)
+local.properties
+
+# Log files
+*.log
+
+# Node.js dependencies
+node_modules/
+firestore-sync/node_modules/
+
+# Firebase Service Account Credentials (DO NOT COMMIT!)
+firestore-sync/serviceAccountKey.json
+
+# IDE files
+.idea/
+*.iml
+.kotlin/
+
+# OS/System files
+.DS_Store
+Thumbs.db

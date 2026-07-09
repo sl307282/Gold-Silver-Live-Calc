@@ -1,0 +1,37 @@
+name: Daily Gold & Silver Rates Sync
+
+on:
+  schedule:
+    # Run once daily at 8:15 AM IST (2:45 AM UTC)
+    # The :45 minute is chosen to avoid peak cron hours on GitHub Actions and minimize delays.
+    - cron: '45 2 * * *'
+  workflow_dispatch: # Allows manual trigger from GitHub UI
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install Dependencies
+        run: |
+          cd firestore-sync
+          npm install
+
+      - name: Create Credentials and Sync Rates
+        env:
+          GOLD_API_KEY: ${{ secrets.GOLD_API_KEY }}
+          FIREBASE_DATABASE_URL: ${{ secrets.FIREBASE_DATABASE_URL }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          cd firestore-sync
+          # Write the service account json content from secret to file
+          echo "$FIREBASE_SERVICE_ACCOUNT" > serviceAccountKey.json
+          # Run the Realtime Database sync script
+          node syncRatesRealtime.js

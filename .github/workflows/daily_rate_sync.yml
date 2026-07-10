@@ -1,6 +1,9 @@
 name: Daily Gold & Silver Rates Sync
 
 on:
+  push:
+    branches:
+         - main
   schedule:
     # Run once daily at 8:15 AM IST (2:45 AM UTC)
     # The :45 minute is chosen to avoid peak cron hours on GitHub Actions and minimize delays.

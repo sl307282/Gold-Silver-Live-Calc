@@ -8,6 +8,9 @@ import com.goldsilver.livecalc.GoldSilverApplication
 import com.goldsilver.livecalc.data.local.entities.AlertEntity
 import com.goldsilver.livecalc.data.local.entities.RateEntity
 import com.goldsilver.livecalc.data.local.entities.VerificationEntity
+import com.goldsilver.livecalc.ota.OtaResult
+import com.goldsilver.livecalc.ota.OtaState
+import com.goldsilver.livecalc.ota.OtaUpdateManager
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import com.goldsilver.livecalc.ui.theme.isSystemDarkThemeGlobal
@@ -35,6 +38,24 @@ class GoldSilverViewModel(application: Application) : AndroidViewModel(applicati
 
     private val _updateMessage = MutableStateFlow("")
     val updateMessage: StateFlow<String> = _updateMessage.asStateFlow()
+
+    // OTA download URL from Remote Config
+    private val _apkDownloadUrl = MutableStateFlow("")
+    val apkDownloadUrl: StateFlow<String> = _apkDownloadUrl.asStateFlow()
+
+    // OTA lifecycle state (IDLE → DOWNLOADING → READY / ERROR)
+    private val _otaState = MutableStateFlow(OtaState.IDLE)
+    val otaState: StateFlow<OtaState> = _otaState.asStateFlow()
+
+    // OTA download progress 0f..1f
+    private val _otaProgress = MutableStateFlow(0f)
+    val otaProgress: StateFlow<Float> = _otaProgress.asStateFlow()
+
+    // OTA error message (non-null when otaState == ERROR)
+    private val _otaError = MutableStateFlow<String?>(null)
+    val otaError: StateFlow<String?> = _otaError.asStateFlow()
+
+    private val otaManager = OtaUpdateManager(application)
 
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
@@ -110,11 +131,13 @@ class GoldSilverViewModel(application: Application) : AndroidViewModel(applicati
                 val latestCode = config["latest_version_code"] as? Int ?: 1
                 val latestName = config["latest_version"] as? String ?: "1.0.0"
                 val message = config["update_message"] as? String ?: ""
+                val apkUrl = config["apk_download_url"] as? String ?: ""
 
                 if (latestCode > com.goldsilver.livecalc.BuildConfig.VERSION_CODE) {
                     _latestVersionCode.value = latestCode
                     _latestVersionName.value = latestName
                     _updateMessage.value = message
+                    _apkDownloadUrl.value = apkUrl
                     _showUpdateDialog.value = true
                 }
             } catch (e: Exception) {
@@ -253,6 +276,54 @@ class GoldSilverViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun dismissUpdateDialog() {
+        _showUpdateDialog.value = false
+        // If user dismisses while not yet downloading, reset state
+        if (_otaState.value == OtaState.IDLE || _otaState.value == OtaState.ERROR) {
+            _otaProgress.value = 0f
+            _otaError.value = null
+        }
+    }
+
+    /** Starts the OTA APK download. Call when user taps "Download & Install". */
+    fun startOtaDownload() {
+        val url = _apkDownloadUrl.value
+        if (url.isBlank()) {
+            _otaError.value = "No download URL configured. Please try updating via the Play Store."
+            _otaState.value = OtaState.ERROR
+            return
+        }
+        if (_otaState.value == OtaState.DOWNLOADING) return // already in flight
+
+        viewModelScope.launch {
+            _otaState.value = OtaState.DOWNLOADING
+            _otaProgress.value = 0f
+            _otaError.value = null
+
+            val result = otaManager.downloadApk(url) { progress ->
+                _otaProgress.value = progress
+            }
+
+            when (result) {
+                is OtaResult.Success -> _otaState.value = OtaState.READY
+                is OtaResult.Error -> {
+                    _otaError.value = result.message
+                    _otaState.value = OtaState.ERROR
+                }
+            }
+        }
+    }
+
+    /** Triggers the system package installer for the downloaded APK. */
+    fun installOta(context: android.content.Context) {
+        otaManager.installApk(context)
+    }
+
+    /** Cancels OTA and cleans up downloaded APK. */
+    fun cancelOta() {
+        otaManager.cleanup()
+        _otaState.value = OtaState.IDLE
+        _otaProgress.value = 0f
+        _otaError.value = null
         _showUpdateDialog.value = false
     }
 

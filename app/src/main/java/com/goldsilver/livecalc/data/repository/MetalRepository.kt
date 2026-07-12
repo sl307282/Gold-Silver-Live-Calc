@@ -335,7 +335,8 @@ class MetalRepository(
             val defaults = mapOf(
                 "latest_version" to "1.0.0",
                 "latest_version_code" to 1L,
-                "update_message" to "A newer version of Gold & Silver Live Calc is available. Please update to access the latest market rates and features."
+                "update_message" to "A newer version of Gold & Silver Live Calc is available. Please update to access the latest market rates and features.",
+                "apk_download_url" to ""  // GitHub Releases direct APK download URL
             )
             remoteConfig.setDefaultsAsync(defaults)
 
@@ -345,12 +346,14 @@ class MetalRepository(
                         val latestCode = remoteConfig.getLong("latest_version_code").toInt()
                         val latestName = remoteConfig.getString("latest_version")
                         val message = remoteConfig.getString("update_message")
+                        val apkUrl = remoteConfig.getString("apk_download_url")
                         if (continuation.isActive) {
                             continuation.resume(
                                 mapOf(
                                     "latest_version" to latestName,
                                     "latest_version_code" to latestCode,
-                                    "update_message" to message
+                                    "update_message" to message,
+                                    "apk_download_url" to apkUrl
                                 )
                             )
                         }
@@ -359,12 +362,14 @@ class MetalRepository(
                         val latestCode = remoteConfig.getLong("latest_version_code").toInt()
                         val latestName = remoteConfig.getString("latest_version")
                         val message = remoteConfig.getString("update_message")
+                        val apkUrl = remoteConfig.getString("apk_download_url")
                         if (continuation.isActive) {
                             continuation.resume(
                                 mapOf(
                                     "latest_version" to latestName,
                                     "latest_version_code" to latestCode,
-                                    "update_message" to message
+                                    "update_message" to message,
+                                    "apk_download_url" to apkUrl
                                 )
                             )
                         }
@@ -375,7 +380,8 @@ class MetalRepository(
             mapOf(
                 "latest_version" to "1.0.0",
                 "latest_version_code" to 1,
-                "update_message" to "A newer version of Gold & Silver Live Calc is available."
+                "update_message" to "A newer version of Gold & Silver Live Calc is available.",
+                "apk_download_url" to ""
             )
         }
     }

@@ -15,6 +15,11 @@ firestore-sync/node_modules/
 # Firebase Service Account Credentials (DO NOT COMMIT!)
 firestore-sync/serviceAccountKey.json
 
+# Keystore files (DO NOT COMMIT — stored as GitHub Secret)
+*.jks
+*.keystore
+app/release/*.aab
+
 # IDE files
 .idea/
 *.iml

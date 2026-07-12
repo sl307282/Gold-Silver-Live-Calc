@@ -1,0 +1,97 @@
+name: Build & Publish Release APK
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'   # Triggers on version tags like v1.1.0, v2.0.0, etc.
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: 'Version name (e.g. 1.1.0)'
+        required: true
+        default: '1.0.0'
+
+jobs:
+  build-release-apk:
+    name: Build Signed Release APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set Up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Extract Version from Tag
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          else
+            VERSION="${{ github.event.inputs.version_name }}"
+          fi
+          echo "VERSION_NAME=$VERSION" >> $GITHUB_ENV
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+
+      - name: Decode Keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > app/release/release.jks
+
+      - name: Write google-services.json
+        run: |
+          echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > app/google-services.json
+
+      - name: Grant Gradlew Execute Permission
+        run: chmod +x gradlew
+
+      - name: Build Signed Release APK
+        env:
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: |
+          ./gradlew assembleRelease \
+            -Pandroid.injected.signing.store.file=${{ github.workspace }}/app/release/release.jks \
+            -Pandroid.injected.signing.store.password=$SIGNING_STORE_PASSWORD \
+            -Pandroid.injected.signing.key.alias=$SIGNING_KEY_ALIAS \
+            -Pandroid.injected.signing.key.password=$SIGNING_KEY_PASSWORD
+
+      - name: Rename APK
+        run: |
+          mv app/build/outputs/apk/release/app-release.apk \
+             app/build/outputs/apk/release/GoldSilverLiveCalc-v${{ env.VERSION_NAME }}.apk
+
+      - name: Create GitHub Release & Upload APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "Gold & Silver Live Calc v${{ env.VERSION_NAME }}"
+          body: |
+            ## What's New in v${{ env.VERSION_NAME }}
+
+            <!-- Add release notes here -->
+
+            ### How to Update
+            1. Download the APK below
+            2. Open it on your Android device
+            3. Tap "Install" when prompted
+
+            > **Note**: If prompted about "Unknown Apps", allow installation for this APK only.
+          files: |
+            app/build/outputs/apk/release/GoldSilverLiveCalc-v${{ env.VERSION_NAME }}.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Output APK Download URL
+        run: |
+          echo "APK published to GitHub Releases."
+          echo "Set this URL in Firebase Remote Config as 'apk_download_url':"
+          echo "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/GoldSilverLiveCalc-v${{ env.VERSION_NAME }}.apk"

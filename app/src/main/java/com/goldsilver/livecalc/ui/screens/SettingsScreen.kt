@@ -2,6 +2,8 @@ package com.goldsilver.livecalc.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -36,7 +38,6 @@ fun SettingsScreen(
     val context = LocalContext.current
     val currency by viewModel.currency.collectAsState()
     val language by viewModel.language.collectAsState()
-    val isNotificationsEnabled by viewModel.isNotificationsEnabled.collectAsState()
     val isPremium by viewModel.isPremium.collectAsState()
     val isDarkMode by viewModel.isDarkMode.collectAsState()
     val backgroundTheme by viewModel.backgroundTheme.collectAsState()
@@ -161,29 +162,6 @@ fun SettingsScreen(
                             }
                         }
 
-                        HorizontalDivider(color = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.08f))
-
-                        // Notification Toggle Row
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable { viewModel.setNotificationsEnabled(!isNotificationsEnabled) }
-                                .padding(12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Notifications, contentDescription = "Notifications", tint = SilverPrimary)
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Text("Price Notifications", color = TextPrimary)
-                            }
-                            Switch(
-                                checked = isNotificationsEnabled,
-                                onCheckedChange = { viewModel.setNotificationsEnabled(it) },
-                                colors = SwitchDefaults.colors(checkedThumbColor = GoldPrimary)
-                            )
-                        }
 
                         HorizontalDivider(color = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.08f))
 
@@ -251,14 +229,15 @@ fun SettingsScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
-                                    val packageName = context.packageName
-                                    val playStoreIntent = Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$packageName")).apply {
+                                    val marketUri = "market://details?id=com.goldsilver.livecalc"
+                                    val playStoreUri = "https://play.google.com/store/apps/details?id=com.goldsilver.livecalc"
+                                    val playStoreIntent = Intent(Intent.ACTION_VIEW, Uri.parse(marketUri)).apply {
                                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                     }
                                     try {
                                         context.startActivity(playStoreIntent)
                                     } catch (e: Exception) {
-                                        val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=$packageName")).apply {
+                                        val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(playStoreUri)).apply {
                                             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                         }
                                         context.startActivity(browserIntent)

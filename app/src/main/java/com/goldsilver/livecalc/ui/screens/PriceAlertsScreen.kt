@@ -13,6 +13,11 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.ui.platform.LocalContext
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -40,6 +45,79 @@ fun PriceAlertsScreen(
     val currency by viewModel.currency.collectAsState()
     val isPremium by viewModel.isPremium.collectAsState()
     val latestRate by viewModel.latestRate.collectAsState()
+    val isNotificationsEnabled by viewModel.isNotificationsEnabled.collectAsState()
+    val context = LocalContext.current
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            viewModel.setNotificationsEnabled(true)
+            try {
+                com.google.firebase.messaging.FirebaseMessaging.getInstance().subscribeToTopic("rate_alerts")
+            } catch (e: java.lang.Exception) {
+                e.printStackTrace()
+            }
+            android.widget.Toast.makeText(
+                context,
+                "✅ Gold & Silver price alerts enabled.\nMonitoring rates in the background and notifying you when your target alerts are met.",
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+        } else {
+            viewModel.setNotificationsEnabled(false)
+            android.widget.Toast.makeText(
+                context,
+                "Notification permission is required to enable alerts.",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
+    val onToggleNotification: (Boolean) -> Unit = { checked ->
+        if (checked) {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                val hasPermission = androidx.core.content.ContextCompat.checkSelfPermission(
+                    context,
+                    android.Manifest.permission.POST_NOTIFICATIONS
+                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                
+                if (hasPermission) {
+                    viewModel.setNotificationsEnabled(true)
+                    try {
+                        com.google.firebase.messaging.FirebaseMessaging.getInstance().subscribeToTopic("rate_alerts")
+                    } catch (e: java.lang.Exception) {
+                        e.printStackTrace()
+                    }
+                    android.widget.Toast.makeText(
+                        context,
+                        "✅ Gold & Silver price alerts enabled.\nMonitoring rates in the background and notifying you when your target alerts are met.",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
+                } else {
+                    permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                }
+            } else {
+                viewModel.setNotificationsEnabled(true)
+                try {
+                    com.google.firebase.messaging.FirebaseMessaging.getInstance().subscribeToTopic("rate_alerts")
+                } catch (e: java.lang.Exception) {
+                    e.printStackTrace()
+                }
+                android.widget.Toast.makeText(
+                    context,
+                    "✅ Gold & Silver price alerts enabled.\nMonitoring rates in the background and notifying you when your target alerts are met.",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+            }
+        } else {
+            viewModel.setNotificationsEnabled(false)
+            try {
+                com.google.firebase.messaging.FirebaseMessaging.getInstance().unsubscribeFromTopic("rate_alerts")
+            } catch (e: java.lang.Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
 
     val currentGoldPrice = latestRate?.goldPrice24k ?: 76.20
     val currentSilverPrice = latestRate?.silverPrice ?: 0.96
@@ -50,7 +128,6 @@ fun PriceAlertsScreen(
     var isAboveCondition by remember { mutableStateOf(true) } // true: ABOVE, false: BELOW
 
     val activeAlerts = remember(alerts) { alerts.filter { it.isActive } }
-    val triggeredAlerts = remember(alerts) { alerts.filter { !it.isActive } }
 
     var showLimitDialog by remember { mutableStateOf(false) }
 
@@ -235,6 +312,71 @@ fun PriceAlertsScreen(
                 }
             }
 
+            // Notification Toggle Card
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .border(
+                            width = 0.5.dp,
+                            color = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.08f),
+                            shape = RoundedCornerShape(16.dp)
+                        ),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = DarkSurface)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onToggleNotification(!isNotificationsEnabled) },
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Notifications, contentDescription = "Notifications", tint = SilverPrimary)
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text("Gold & Silver Price Alerts", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                            }
+                            Switch(
+                                checked = isNotificationsEnabled,
+                                onCheckedChange = { onToggleNotification(it) },
+                                thumbContent = if (isNotificationsEnabled) {
+                                    {
+                                        Icon(
+                                            imageVector = Icons.Filled.Check,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(SwitchDefaults.IconSize),
+                                            tint = DarkBackground
+                                        )
+                                    }
+                                } else null,
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = GoldPrimary,
+                                    checkedTrackColor = GoldPrimary.copy(alpha = 0.3f),
+                                    checkedBorderColor = GoldPrimary,
+                                    uncheckedThumbColor = TextMuted,
+                                    uncheckedTrackColor = DarkSurfaceElevated,
+                                    uncheckedBorderColor = TextMuted.copy(alpha = 0.5f)
+                                )
+                            )
+                        }
+                        if (isNotificationsEnabled) {
+                            Text(
+                                text = "✅ Gold & Silver price alerts enabled.\nMonitoring rates in the background and notifying you when your target alerts are met.",
+                                color = TextMuted,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
             // Active Alerts Section
             item {
                 Text(
@@ -264,35 +406,6 @@ fun PriceAlertsScreen(
                 }
             }
 
-            // Trigger History Section
-            item {
-                Text(
-                    text = "TRIGGERED HISTORY (${triggeredAlerts.size})",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = TextMuted,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            if (triggeredAlerts.isEmpty()) {
-                item {
-                    Text(
-                        text = "No triggered alerts logged yet.",
-                        color = TextSecondary,
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
-                }
-            } else {
-                items(triggeredAlerts) { alert ->
-                    AlertItem(
-                        alert = alert,
-                        currency = currency,
-                        onDelete = { viewModel.removeAlert(alert) }
-                    )
-                }
-            }
-            
             item {
                 Spacer(modifier = Modifier.height(16.dp))
             }
@@ -372,20 +485,27 @@ fun AlertItem(
                 )
                 Spacer(modifier = Modifier.width(16.dp))
                 Column {
-                    Text(
-                        text = "$metalName $conditionSymbol ${String.format("%.2f", alert.targetPrice)} $currency",
-                        color = TextPrimary,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "$metalName $conditionSymbol ${String.format("%.2f", alert.targetPrice)} $currency",
+                            color = TextPrimary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                    }
                     
-                    val date = if (alert.isActive) Date(alert.createdAt) else Date(alert.triggeredAt ?: alert.createdAt)
                     val sdf = SimpleDateFormat("dd MMM, hh:mm a", Locale.getDefault())
-                    val statusText = if (alert.isActive) "Created: ${sdf.format(date)}" else "Triggered: ${sdf.format(date)}"
+                    val createdDate = Date(alert.createdAt)
+                    val statusText = if (alert.triggeredAt != null) {
+                        val triggeredDate = Date(alert.triggeredAt)
+                        "Created: ${sdf.format(createdDate)} | Last Hit: ${sdf.format(triggeredDate)}"
+                    } else {
+                        "Created: ${sdf.format(createdDate)}"
+                    }
 
                     Text(
                         text = statusText,
-                        color = if (alert.isActive) TextSecondary else AccentGreen,
+                        color = TextSecondary,
                         fontSize = 12.sp
                     )
                 }

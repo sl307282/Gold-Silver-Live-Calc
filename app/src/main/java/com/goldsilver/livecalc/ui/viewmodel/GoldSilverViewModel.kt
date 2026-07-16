@@ -63,7 +63,7 @@ class GoldSilverViewModel(application: Application) : AndroidViewModel(applicati
     // Settings States
     val currency = MutableStateFlow(sharedPrefs.getString("currency", "INR") ?: "INR")
     val language = MutableStateFlow(sharedPrefs.getString("language", "English") ?: "English")
-    val isNotificationsEnabled = MutableStateFlow(sharedPrefs.getBoolean("notifications_enabled", true))
+    val isNotificationsEnabled = MutableStateFlow(sharedPrefs.getBoolean("notifications_enabled", false))
     val isPremium = MutableStateFlow(true)
     val isDarkMode = MutableStateFlow(sharedPrefs.getBoolean("dark_mode", true))
     val backgroundTheme = MutableStateFlow(sharedPrefs.getString("background_theme", "Night") ?: "Night")
@@ -200,6 +200,11 @@ class GoldSilverViewModel(application: Application) : AndroidViewModel(applicati
     fun setNotificationsEnabled(enabled: Boolean) {
         isNotificationsEnabled.value = enabled
         sharedPrefs.edit().putBoolean("notifications_enabled", enabled).apply()
+        if (enabled) {
+            com.goldsilver.livecalc.background.BootReceiver.scheduleBackgroundWork(app)
+        } else {
+            com.goldsilver.livecalc.background.BootReceiver.cancelBackgroundWork(app)
+        }
     }
 
     fun setDarkMode(enabled: Boolean) {

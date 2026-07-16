@@ -13,7 +13,7 @@ import com.goldsilver.livecalc.data.local.entities.VerificationEntity
 
 @Database(
     entities = [RateEntity::class, AlertEntity::class, VerificationEntity::class],
-    version = 1,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

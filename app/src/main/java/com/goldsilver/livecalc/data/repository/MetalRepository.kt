@@ -51,45 +51,83 @@ class MetalRepository(
             checkAndTriggerAlerts(latestRate)
         }
     }
-    suspend fun updateAlert(alert: AlertEntity) = alertDao.updateAlert(alert)
+    suspend fun updateAlert(alert: AlertEntity) = withContext(Dispatchers.IO) {
+        val resetAlert = alert.copy(
+            isActive = true,
+            triggeredAt = null
+        )
+        alertDao.updateAlert(resetAlert)
+        val latestRate = rateDao.getLatestRate()
+        if (latestRate != null) {
+            checkAndTriggerAlerts(latestRate)
+        }
+    }
     suspend fun deleteAlert(alert: AlertEntity) = alertDao.deleteAlert(alert)
     suspend fun deleteAlertById(id: Int) = alertDao.deleteAlertById(id)
+
+    private fun getCurrencySymbol(currencyCode: String): String {
+        return when (currencyCode) {
+            "INR" -> "₹"
+            "USD" -> "$"
+            "EUR" -> "€"
+            "AED" -> "د.إ"
+            "GBP" -> "£"
+            else -> currencyCode
+        }
+    }
 
     // Check and trigger price alerts
     suspend fun checkAndTriggerAlerts(rate: RateEntity) = withContext(Dispatchers.IO) {
         val activeAlerts = alertDao.getActiveAlerts()
         val sharedPrefs = context.getSharedPreferences("gold_silver_prefs", Context.MODE_PRIVATE)
-        val isNotificationsEnabled = sharedPrefs.getBoolean("notifications_enabled", true)
+        val isNotificationsEnabled = sharedPrefs.getBoolean("notifications_enabled", false)
         val notificationHelper = com.goldsilver.livecalc.background.NotificationHelper(context)
 
         for (alert in activeAlerts) {
             val currentPrice = if (alert.metal == "GOLD") rate.goldPrice24k else rate.silverPrice
-            val metalName = if (alert.metal == "GOLD") "Gold 24K" else "Silver"
+            val metalName = if (alert.metal == "GOLD") "Gold (24K)" else "Silver"
             
-            var isTriggered = false
+            var isConditionMet = false
             if (alert.condition == "ABOVE" && currentPrice >= alert.targetPrice) {
-                isTriggered = true
+                isConditionMet = true
             } else if (alert.condition == "BELOW" && currentPrice <= alert.targetPrice) {
-                isTriggered = true
+                isConditionMet = true
             }
 
-            if (isTriggered) {
-                // Trigger notification if enabled
-                if (isNotificationsEnabled) {
-                    val formattedPrice = String.format("%.2f", currentPrice)
-                    val formattedTarget = String.format("%.2f", alert.targetPrice)
-                    val title = "Price Alert: $metalName"
-                    val message = "$metalName has crossed your target price of $formattedTarget ${rate.currency}! Current price: $formattedPrice ${rate.currency}"
-                    notificationHelper.showPriceAlertNotification(title, message)
+            if (isConditionMet) {
+                val triggeredTime = alert.triggeredAt
+                val isAlreadyTriggeredToday = if (triggeredTime != null) {
+                    val triggeredCal = java.util.Calendar.getInstance().apply { timeInMillis = triggeredTime }
+                    val currentCal = java.util.Calendar.getInstance()
+                    triggeredCal.get(java.util.Calendar.YEAR) == currentCal.get(java.util.Calendar.YEAR) &&
+                    triggeredCal.get(java.util.Calendar.DAY_OF_YEAR) == currentCal.get(java.util.Calendar.DAY_OF_YEAR)
+                } else {
+                    false
                 }
 
-                // Mark alert as triggered
-                alertDao.updateAlert(
-                    alert.copy(
-                        isActive = false,
-                        triggeredAt = System.currentTimeMillis()
+                if (!isAlreadyTriggeredToday) {
+                    // Trigger notification if enabled
+                    if (isNotificationsEnabled) {
+                        val symbol = getCurrencySymbol(rate.currency)
+                        val formattedPrice = "$symbol${String.format("%.2f", currentPrice)}"
+                        val formattedTarget = "$symbol${String.format("%.2f", alert.targetPrice)}"
+                        val title = if (alert.metal == "GOLD") "🔔 Gold Price Alert" else "🔔 Silver Price Alert"
+                        val message = if (alert.condition == "ABOVE") {
+                            "$metalName has reached $formattedPrice/g, crossing your target of $formattedTarget/g."
+                        } else {
+                            "$metalName has fallen below your target of $formattedTarget/g. Current price: $formattedPrice/g."
+                        }
+                        notificationHelper.showPriceAlertNotification(title, message)
+                    }
+
+                    // Mark alert as triggered today, keeping it active for subsequent days
+                    alertDao.updateAlert(
+                        alert.copy(
+                            isActive = true,
+                            triggeredAt = System.currentTimeMillis()
+                        )
                     )
-                )
+                }
             }
         }
     }
@@ -328,13 +366,18 @@ class MetalRepository(
         try {
             val remoteConfig = com.google.firebase.remoteconfig.FirebaseRemoteConfig.getInstance()
             val configSettings = com.google.firebase.remoteconfig.remoteConfigSettings {
+                // Always fetch fresh in debug; in release fetch every hour
                 minimumFetchIntervalInSeconds = if (com.goldsilver.livecalc.BuildConfig.DEBUG) 0 else 3600
             }
             remoteConfig.setConfigSettingsAsync(configSettings)
 
+            val currentCode = com.goldsilver.livecalc.BuildConfig.VERSION_CODE.toLong()
+            val currentName = com.goldsilver.livecalc.BuildConfig.VERSION_NAME
             val defaults = mapOf(
-                "latest_version" to "1.0.0",
-                "latest_version_code" to 1L,
+                "latest_version" to currentName,
+                "app_version" to currentName,
+                "latest_version_code" to currentCode,
+                "app_version_code" to currentCode,
                 "update_message" to "A newer version of Gold & Silver Live Calc is available. Please update to access the latest market rates and features.",
                 "apk_download_url" to ""  // GitHub Releases direct APK download URL
             )
@@ -342,9 +385,17 @@ class MetalRepository(
 
             suspendCancellableCoroutine<Map<String, Any>> { continuation ->
                 remoteConfig.fetchAndActivate()
-                    .addOnCompleteListener { task ->
-                        val latestCode = remoteConfig.getLong("latest_version_code").toInt()
-                        val latestName = remoteConfig.getString("latest_version")
+                    .addOnCompleteListener { _ ->
+                        // Read latest_version_code; fall back to app_version_code if zero/missing
+                        val rawLatestCode = remoteConfig.getLong("latest_version_code")
+                        val rawAppCode = remoteConfig.getLong("app_version_code")
+                        val latestCode = (if (rawLatestCode > 0) rawLatestCode else rawAppCode).toInt()
+
+                        // Read version name; fall back to app_version
+                        val rawLatestName = remoteConfig.getString("latest_version")
+                        val rawAppName = remoteConfig.getString("app_version")
+                        val latestName = rawLatestName.ifBlank { rawAppName }
+
                         val message = remoteConfig.getString("update_message")
                         val apkUrl = remoteConfig.getString("apk_download_url")
                         if (continuation.isActive) {
@@ -359,8 +410,15 @@ class MetalRepository(
                         }
                     }
                     .addOnFailureListener {
-                        val latestCode = remoteConfig.getLong("latest_version_code").toInt()
-                        val latestName = remoteConfig.getString("latest_version")
+                        // On fetch failure, still try to read cached/default values
+                        val rawLatestCode = remoteConfig.getLong("latest_version_code")
+                        val rawAppCode = remoteConfig.getLong("app_version_code")
+                        val latestCode = (if (rawLatestCode > 0) rawLatestCode else rawAppCode).toInt()
+
+                        val rawLatestName = remoteConfig.getString("latest_version")
+                        val rawAppName = remoteConfig.getString("app_version")
+                        val latestName = rawLatestName.ifBlank { rawAppName }
+
                         val message = remoteConfig.getString("update_message")
                         val apkUrl = remoteConfig.getString("apk_download_url")
                         if (continuation.isActive) {
@@ -378,8 +436,8 @@ class MetalRepository(
         } catch (e: Exception) {
             e.printStackTrace()
             mapOf(
-                "latest_version" to "1.0.0",
-                "latest_version_code" to 1,
+                "latest_version" to com.goldsilver.livecalc.BuildConfig.VERSION_NAME,
+                "latest_version_code" to com.goldsilver.livecalc.BuildConfig.VERSION_CODE,
                 "update_message" to "A newer version of Gold & Silver Live Calc is available.",
                 "apk_download_url" to ""
             )

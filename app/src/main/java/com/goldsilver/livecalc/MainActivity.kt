@@ -112,6 +112,7 @@ class MainActivity : ComponentActivity() {
                             ) {
                                 when (otaState) {
                                     OtaState.IDLE -> {
+                                        val isPlayStoreUrl = apkDownloadUrl.contains("play.google.com") || apkDownloadUrl.contains("market://")
                                         Text(
                                             text = updateMessage.ifBlank {
                                                 "Gold & Silver Live Calc v$latestVersionName is available with the latest market rates and improvements."
@@ -119,7 +120,7 @@ class MainActivity : ComponentActivity() {
                                             color = com.goldsilver.livecalc.ui.theme.TextPrimary,
                                             fontSize = 14.sp
                                         )
-                                        if (apkDownloadUrl.isNotBlank()) {
+                                        if (apkDownloadUrl.isNotBlank() && !isPlayStoreUrl) {
                                             Text(
                                                 text = "Tap \"Download & Install\" to update instantly — no Play Store needed.",
                                                 color = com.goldsilver.livecalc.ui.theme.TextSecondary,
@@ -189,17 +190,19 @@ class MainActivity : ComponentActivity() {
                             }
                         },
                         confirmButton = {
+                            val isPlayStoreUrl = apkDownloadUrl.contains("play.google.com") || apkDownloadUrl.contains("market://")
                             Button(
                                 onClick = {
                                     when (otaState) {
                                         OtaState.IDLE -> {
-                                            if (apkDownloadUrl.isNotBlank()) {
+                                            if (apkDownloadUrl.isNotBlank() && !isPlayStoreUrl) {
                                                 viewModel.startOtaDownload()
                                             } else {
-                                                // Fallback: Play Store redirect
+                                                // Redirect to Play Store
+                                                val targetUrl = apkDownloadUrl.ifBlank { "market://details?id=com.goldsilver.livecalc" }
                                                 val intent = android.content.Intent(
                                                     android.content.Intent.ACTION_VIEW,
-                                                    android.net.Uri.parse("market://details?id=com.goldsilver.livecalc")
+                                                    android.net.Uri.parse(targetUrl)
                                                 ).apply { addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK) }
                                                 try { startActivity(intent) } catch (e: Exception) {
                                                     startActivity(android.content.Intent(
@@ -226,7 +229,7 @@ class MainActivity : ComponentActivity() {
                             ) {
                                 Text(
                                     text = when (otaState) {
-                                        OtaState.IDLE -> if (apkDownloadUrl.isNotBlank()) "Download & Install" else "Update Now"
+                                        OtaState.IDLE -> if (apkDownloadUrl.isNotBlank() && !isPlayStoreUrl) "Download & Install" else "Update Now"
                                         OtaState.DOWNLOADING -> "Downloading…"
                                         OtaState.READY -> "Install Now"
                                         OtaState.ERROR -> "Retry Download"

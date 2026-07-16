@@ -53,8 +53,7 @@ fun SilverCalculatorScreen(
     var showGstInfo by remember { mutableStateOf(false) }
     var unitDropdownExpanded by remember { mutableStateOf(false) }
 
-    // Manual calculation trigger
-    var triggerCalc by remember { mutableStateOf(0) }
+    // Calculation states
     var calculatedValues by remember { mutableStateOf(CalculatedBreakdown(0.0, 0.0, 0.0, 0.0)) }
     var hasCalculated by remember { mutableStateOf(false) }
 
@@ -83,8 +82,18 @@ fun SilverCalculatorScreen(
 
     val finalRatePerGram = customRateInput.toDoubleOrNull() ?: currentRatePerGram
 
-    LaunchedEffect(triggerCalc) {
-        if (triggerCalc > 0) {
+    // Trigger recalculation when inputs change (if already calculated)
+    LaunchedEffect(
+        hasCalculated,
+        weightInput,
+        selectedUnit,
+        selectedPurity,
+        finalRatePerGram,
+        isPercentageCharge,
+        makingChargeInput,
+        gstInput
+    ) {
+        if (hasCalculated) {
             val weight = weightInput.toDoubleOrNull() ?: 0.0
             val makingCharge = makingChargeInput.toDoubleOrNull() ?: 0.0
             val gstPercent = gstInput.toDoubleOrNull() ?: 0.0
@@ -97,7 +106,6 @@ fun SilverCalculatorScreen(
             val subtotal = baseValue + makingChargeAmount
             val gstAmount = subtotal * (gstPercent / 100.0)
             calculatedValues = CalculatedBreakdown(baseValue, makingChargeAmount, gstAmount, subtotal + gstAmount)
-            hasCalculated = true
         }
     }
 
@@ -204,7 +212,7 @@ fun SilverCalculatorScreen(
                                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
                                     Text(
-                                        text = String.format(java.util.Locale.US, "%.2f", finalRatePerGram),
+                                        text = formatIndianStyle(finalRatePerGram),
                                         color = SilverPrimary, fontWeight = FontWeight.Bold, fontSize = 26.sp
                                     )
                                     Text(
@@ -395,9 +403,9 @@ fun SilverCalculatorScreen(
                         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                             Text("ESTIMATED BREAKDOWN", color = SilverPrimary, fontWeight = FontWeight.Bold, fontSize = 12.sp, letterSpacing = 1.sp)
                             HorizontalDivider(color = SilverPrimary.copy(alpha = 0.15f))
-                            BreakdownRow(icon = "🪙", label = "Silver Value", value = String.format("%.2f %s", calculatedValues.baseGoldValue, currency))
-                            BreakdownRow(icon = "🛠", label = "Making Charges", value = String.format("%.2f %s", calculatedValues.makingCharges, currency))
-                            BreakdownRow(icon = "🧾", label = "GST Amount", value = String.format("%.2f %s", calculatedValues.gstAmount, currency))
+                            BreakdownRow(icon = "🪙", label = "Silver Value", value = "${formatIndianStyle(calculatedValues.baseGoldValue)} $currency")
+                            BreakdownRow(icon = "🛠", label = "Making Charges", value = "${formatIndianStyle(calculatedValues.makingCharges)} $currency")
+                            BreakdownRow(icon = "🧾", label = "GST Amount", value = "${formatIndianStyle(calculatedValues.gstAmount)} $currency")
                         }
                     }
                 }
@@ -417,7 +425,7 @@ fun SilverCalculatorScreen(
                         ) {
                             Text("💰 Final Payable", color = TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                             Text(
-                                text = String.format("%.2f %s", calculatedValues.finalTotal, currency),
+                                text = "${formatIndianStyle(calculatedValues.finalTotal)} $currency",
                                 color = SilverPrimary,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 30.sp,
@@ -446,7 +454,7 @@ fun SilverCalculatorScreen(
                         Text("Reset", color = SilverPrimary, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     }
                     Button(
-                        onClick = { focusManager.clearFocus(); triggerCalc++ },
+                        onClick = { focusManager.clearFocus(); hasCalculated = true },
                         modifier = Modifier.weight(1.6f).height(52.dp),
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = SilverPrimary)
@@ -470,4 +478,36 @@ private fun BreakdownRow(icon: String, label: String, value: String) {
         }
         Text(value, color = TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
     }
+}
+
+private fun formatIndianStyle(value: Double): String {
+    val isNegative = value < 0
+    val absValue = kotlin.math.abs(value)
+    val formattedStr = String.format(java.util.Locale.US, "%.2f", absValue)
+    val parts = formattedStr.split(".")
+    val integerPart = parts[0]
+    val decimalPart = parts.getOrNull(1) ?: "00"
+
+    val len = integerPart.length
+    val formattedInteger = if (len <= 3) {
+        integerPart
+    } else {
+        val lastThree = integerPart.substring(len - 3)
+        val remaining = integerPart.substring(0, len - 3)
+        val sb = StringBuilder()
+        var i = remaining.length
+        while (i > 0) {
+            val start = (i - 2).coerceAtLeast(0)
+            val chunk = remaining.substring(start, i)
+            if (sb.isNotEmpty()) {
+                sb.insert(0, ",")
+            }
+            sb.insert(0, chunk)
+            i -= 2
+        }
+        "${sb},$lastThree"
+    }
+    
+    val prefix = if (isNegative) "-" else ""
+    return "$prefix$formattedInteger.$decimalPart"
 }

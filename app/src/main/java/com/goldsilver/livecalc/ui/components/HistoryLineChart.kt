@@ -141,8 +141,12 @@ fun HistoryLineChart(
             // Draw fill area under the line
             val fillPath = Path().apply {
                 moveTo(screenPoints.first().x, chartHeight)
-                for (i in 0 until numPoints) {
-                    lineTo(screenPoints[i].x, screenPoints[i].y)
+                lineTo(screenPoints.first().x, screenPoints.first().y)
+                for (i in 1 until numPoints) {
+                    val pPrev = screenPoints[i - 1]
+                    val pCurr = screenPoints[i]
+                    val controlX = (pPrev.x + pCurr.x) / 2f
+                    cubicTo(controlX, pPrev.y, controlX, pCurr.y, pCurr.x, pCurr.y)
                 }
                 lineTo(screenPoints.last().x, chartHeight)
                 close()
@@ -167,8 +171,7 @@ fun HistoryLineChart(
                     val pPrev = screenPoints[i - 1]
                     val pCurr = screenPoints[i]
                     val controlX = (pPrev.x + pCurr.x) / 2f
-                    quadraticTo(controlX, pPrev.y, controlX, pCurr.y)
-                    lineTo(pCurr.x, pCurr.y)
+                    cubicTo(controlX, pPrev.y, controlX, pCurr.y, pCurr.x, pCurr.y)
                 }
             }
 

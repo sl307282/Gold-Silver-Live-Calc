@@ -41,6 +41,7 @@ jobs:
 
       - name: Decode Keystore
         run: |
+          mkdir -p app/release
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > app/release/release.jks
 
       - name: Write google-services.json

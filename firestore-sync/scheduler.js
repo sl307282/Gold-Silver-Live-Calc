@@ -8,9 +8,6 @@ function runSync() {
     
     // Run Realtime DB Sync
     fork(path.join(__dirname, 'syncRatesRealtime.js'));
-    
-    // Run Firestore Sync
-    fork(path.join(__dirname, 'syncRates.js'));
 }
 
 function scheduleNextRun() {

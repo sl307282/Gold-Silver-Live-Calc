@@ -22,7 +22,7 @@ const db = admin.firestore();
 
 // CONFIGURATIONS
 // Obtain an API Key from https://www.goldapi.io/
-const GOLD_API_KEY = process.env.GOLD_API_KEY || 'goldapi-136ec4ee91fff624d86a276a8699d6c1-io'; 
+const GOLD_API_KEY = process.env.GOLD_API_KEY || 'goldapi-f0531209bb348f3fc593c8bc404a6dc6-io'; 
 const CURRENCIES = ['USD', 'INR', 'EUR', 'AED', 'GBP'];
 
 if (GOLD_API_KEY === 'YOUR_GOLDAPI_IO_KEY' && !process.env.GOLD_API_KEY) {

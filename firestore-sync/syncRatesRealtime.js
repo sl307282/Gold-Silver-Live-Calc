@@ -15,7 +15,7 @@ try {
 // CONFIGURATIONS
 // Replace this with your Realtime Database URL shown in the Firebase Console (e.g. https://your-project-default-rtdb.firebaseio.com/)
 const DATABASE_URL = process.env.FIREBASE_DATABASE_URL || 'https://gold-silver-live-calc-default-rtdb.firebaseio.com/'; 
-const GOLD_API_KEY = process.env.GOLD_API_KEY || 'goldapi-136ec4ee91fff624d86a276a8699d6c1-io'; 
+const GOLD_API_KEY = process.env.GOLD_API_KEY || 'goldapi-f0531209bb348f3fc593c8bc404a6dc6-io'; 
 const CURRENCIES = ['USD', 'INR', 'EUR', 'AED', 'GBP'];
 
 admin.initializeApp({

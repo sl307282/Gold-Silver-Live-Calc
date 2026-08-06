@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.goldsilver.livecalc.ui.theme.*
 import com.goldsilver.livecalc.ui.viewmodel.GoldSilverViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -36,11 +37,11 @@ fun SettingsScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val currency by viewModel.currency.collectAsState()
-    val language by viewModel.language.collectAsState()
-    val isPremium by viewModel.isPremium.collectAsState()
-    val isDarkMode by viewModel.isDarkMode.collectAsState()
-    val backgroundTheme by viewModel.backgroundTheme.collectAsState()
+    val currency by viewModel.currency.collectAsStateWithLifecycle()
+    val language by viewModel.language.collectAsStateWithLifecycle()
+    val isPremium by viewModel.isPremium.collectAsStateWithLifecycle()
+    val isDarkMode by viewModel.isDarkMode.collectAsStateWithLifecycle()
+    val backgroundTheme by viewModel.backgroundTheme.collectAsStateWithLifecycle()
 
 
     var currencyExpanded by remember { mutableStateOf(false) }

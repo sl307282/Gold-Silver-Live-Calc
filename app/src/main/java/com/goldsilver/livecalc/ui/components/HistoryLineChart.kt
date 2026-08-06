@@ -82,7 +82,7 @@ fun HistoryLineChart(
             Column {
                 Text("HIGH", style = MaterialTheme.typography.labelSmall, color = TextMuted)
                 Text(
-                    text = String.format("%.2f %s", maxPrice, currency),
+                    text = "${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(maxPrice)} $currency",
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
                     color = AccentGreen
@@ -91,7 +91,7 @@ fun HistoryLineChart(
             Column(horizontalAlignment = Alignment.End) {
                 Text("LOW", style = MaterialTheme.typography.labelSmall, color = TextMuted)
                 Text(
-                    text = String.format("%.2f %s", minPrice, currency),
+                    text = "${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(minPrice)} $currency",
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
                     color = AccentRed

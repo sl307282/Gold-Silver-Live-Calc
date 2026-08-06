@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Pushing the branding image up by applying bottom padding -->
+    <item android:bottom="60dp">
+        <bitmap
+            android:src="@drawable/splash_branding"
+            android:gravity="center" />
+    </item>
+</layer-list>

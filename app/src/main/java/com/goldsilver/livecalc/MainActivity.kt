@@ -3,7 +3,12 @@ package com.goldsilver.livecalc
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.core.animation.doOnEnd
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.activity.viewModels
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.border
@@ -34,29 +39,78 @@ import com.goldsilver.livecalc.ui.components.CustomBottomNavigation
 import com.goldsilver.livecalc.ui.screens.*
 import com.goldsilver.livecalc.ui.theme.GoldSilverLiveCalcTheme
 import com.goldsilver.livecalc.ui.viewmodel.GoldSilverViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 class MainActivity : ComponentActivity() {
+    private val viewModel: GoldSilverViewModel by viewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Handle native splash screen transition
-        installSplashScreen()
+        // Ensure the splash screen stays visible for at least 1.5 seconds
+        var isMinimumTimePassed = false
+        lifecycleScope.launch {
+            delay(1500)
+            isMinimumTimePassed = true
+        }
+        
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            val splashScreen = installSplashScreen()
+            // Do not dismiss until both the minimum time has passed AND the required data is loaded
+            splashScreen.setKeepOnScreenCondition { 
+                !isMinimumTimePassed || !viewModel.isInitialLoadComplete.value 
+            }
+            
+            // Override the default Android zoom-out with a smooth, cinematic crossfade
+            splashScreen.setOnExitAnimationListener { splashScreenView ->
+                val fadeOut = android.animation.ObjectAnimator.ofFloat(
+                    splashScreenView.view,
+                    android.view.View.ALPHA,
+                    1f,
+                    0f
+                )
+                fadeOut.duration = 600L // Smooth 600ms fade
+                fadeOut.doOnEnd { splashScreenView.remove() }
+                fadeOut.start()
+            }
+        } else {
+            // For Android 11 and below, we bypass the AndroidX library completely to avoid double logos
+            // and use our pixel-perfect layered windowBackground. We simply switch to the main theme here.
+            setTheme(R.style.Theme_GoldSilverLiveCalc)
+        }
+
         super.onCreate(savedInstanceState)
+        
+        // On Android 11 and below, manually delay the first frame draw to hold the legacy splash screen
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S) {
+            val content = findViewById<android.view.View>(android.R.id.content)
+            content.viewTreeObserver.addOnPreDrawListener(
+                object : android.view.ViewTreeObserver.OnPreDrawListener {
+                    override fun onPreDraw(): Boolean {
+                        return if (isMinimumTimePassed && viewModel.isInitialLoadComplete.value) {
+                            content.viewTreeObserver.removeOnPreDrawListener(this)
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                }
+            )
+        }
 
         setContent {
             GoldSilverLiveCalcTheme {
                 val navController = rememberNavController()
-                val viewModel: GoldSilverViewModel = viewModel()
                 val context = LocalContext.current
 
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route ?: "dashboard"
 
-                val showUpdateDialog by viewModel.showUpdateDialog.collectAsState()
-                val latestVersionName by viewModel.latestVersionName.collectAsState()
-                val updateMessage by viewModel.updateMessage.collectAsState()
-                val otaState by viewModel.otaState.collectAsState()
-                val otaProgress by viewModel.otaProgress.collectAsState()
-                val otaError by viewModel.otaError.collectAsState()
-                val apkDownloadUrl by viewModel.apkDownloadUrl.collectAsState()
+                val showUpdateDialog by viewModel.showUpdateDialog.collectAsStateWithLifecycle()
+                val latestVersionName by viewModel.latestVersionName.collectAsStateWithLifecycle()
+                val updateMessage by viewModel.updateMessage.collectAsStateWithLifecycle()
+                val otaState by viewModel.otaState.collectAsStateWithLifecycle()
+                val otaProgress by viewModel.otaProgress.collectAsStateWithLifecycle()
+                val otaError by viewModel.otaError.collectAsStateWithLifecycle()
+                val apkDownloadUrl by viewModel.apkDownloadUrl.collectAsStateWithLifecycle()
 
                 // Animated progress for smooth progress bar
                 val animatedProgress by animateFloatAsState(
@@ -296,15 +350,6 @@ class MainActivity : ComponentActivity() {
                         startDestination = "dashboard",
                         modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding())
                     ) {
-                        composable("splash") {
-                            SplashScreen(
-                                onSplashFinished = {
-                                    navController.navigate("dashboard") {
-                                        popUpTo("splash") { inclusive = true }
-                                    }
-                                }
-                            )
-                        }
                         composable("dashboard") {
                             HomeDashboardScreen(
                                 viewModel = viewModel,

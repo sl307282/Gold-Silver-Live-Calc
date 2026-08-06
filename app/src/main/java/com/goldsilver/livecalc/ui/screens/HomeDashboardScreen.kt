@@ -30,6 +30,7 @@ import com.goldsilver.livecalc.ui.viewmodel.GoldSilverViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -38,11 +39,11 @@ fun HomeDashboardScreen(
     onNavigate: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val latestRate by viewModel.latestRate.collectAsState()
-    val historicalRates by viewModel.historicalRates.collectAsState()
-    val isRefreshing by viewModel.isRefreshing.collectAsState()
-    val currency by viewModel.currency.collectAsState()
-    val isPremium by viewModel.isPremium.collectAsState()
+    val latestRate by viewModel.latestRate.collectAsStateWithLifecycle()
+    val historicalRates by viewModel.historicalRates.collectAsStateWithLifecycle()
+    val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
+    val currency by viewModel.currency.collectAsStateWithLifecycle()
+    val isPremium by viewModel.isPremium.collectAsStateWithLifecycle()
 
     // Determine change percentages
     val goldChange = remember(latestRate, historicalRates) {
@@ -140,7 +141,7 @@ fun HomeDashboardScreen(
                 latestRate?.let { rate ->
                     MetalRateCard(
                         title = "GOLD (XAU)",
-                        primaryPrice = String.format("%.2f %s/g", rate.goldPrice24k, currency),
+                        primaryPrice = "${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(rate.goldPrice24k)} $currency/g",
                         changePercent = goldChange,
                         isGold = true,
                         purityList = listOf(
@@ -174,7 +175,7 @@ fun HomeDashboardScreen(
                 latestRate?.let { rate ->
                     MetalRateCard(
                         title = "SILVER (XAG)",
-                        primaryPrice = String.format("%.2f %s/g", rate.silverPrice, currency),
+                        primaryPrice = "${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(rate.silverPrice)} $currency/g",
                         changePercent = silverChange,
                         isGold = false,
                         purityList = listOf(
@@ -388,7 +389,7 @@ fun MetalRateCard(
                     ) {
                         Text(text = label, color = TextSecondary, fontSize = 13.sp)
                         Text(
-                            text = String.format(Locale.getDefault(), "%.2f %s", value, currency),
+                            text = "${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(value)} $currency",
                             color = TextPrimary,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold

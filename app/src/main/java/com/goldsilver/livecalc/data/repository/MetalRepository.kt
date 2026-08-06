@@ -109,8 +109,8 @@ class MetalRepository(
                     // Trigger notification if enabled
                     if (isNotificationsEnabled) {
                         val symbol = getCurrencySymbol(rate.currency)
-                        val formattedPrice = "$symbol${String.format("%.2f", currentPrice)}"
-                        val formattedTarget = "$symbol${String.format("%.2f", alert.targetPrice)}"
+                        val formattedPrice = "$symbol${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(currentPrice)}"
+                        val formattedTarget = "$symbol${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(alert.targetPrice)}"
                         val title = if (alert.metal == "GOLD") "🔔 Gold Price Alert" else "🔔 Silver Price Alert"
                         val message = if (alert.condition == "ABOVE") {
                             "$metalName has reached $formattedPrice/g, crossing your target of $formattedTarget/g."

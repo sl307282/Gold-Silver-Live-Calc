@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.goldsilver.livecalc.ui.theme.*
 import com.goldsilver.livecalc.ui.viewmodel.GoldSilverViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -37,8 +38,8 @@ fun SilverCalculatorScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val latestRate by viewModel.latestRate.collectAsState()
-    val currency by viewModel.currency.collectAsState()
+    val latestRate by viewModel.latestRate.collectAsStateWithLifecycle()
+    val currency by viewModel.currency.collectAsStateWithLifecycle()
     val focusManager = LocalFocusManager.current
 
     // Input states
@@ -76,11 +77,13 @@ fun SilverCalculatorScreen(
 
     LaunchedEffect(selectedPurity, latestRate) {
         if (!isEditingRate) {
-            customRateInput = String.format(java.util.Locale.US, "%.2f", currentRatePerGram)
+            customRateInput = com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(currentRatePerGram)
         }
     }
 
-    val finalRatePerGram = customRateInput.toDoubleOrNull() ?: currentRatePerGram
+    val finalRatePerGram = com.goldsilver.livecalc.util.IndianCurrencyFormatter.parseAmount(customRateInput).let {
+        if (it <= 0.0) currentRatePerGram else it
+    }
 
     // Trigger recalculation when inputs change (if already calculated)
     LaunchedEffect(
@@ -95,7 +98,7 @@ fun SilverCalculatorScreen(
     ) {
         if (hasCalculated) {
             val weight = weightInput.toDoubleOrNull() ?: 0.0
-            val makingCharge = makingChargeInput.toDoubleOrNull() ?: 0.0
+            val makingCharge = com.goldsilver.livecalc.util.IndianCurrencyFormatter.parseAmount(makingChargeInput)
             val gstPercent = gstInput.toDoubleOrNull() ?: 0.0
             val unitMultiplier = when (selectedUnit) {
                 "Kilogram" -> 1000.0; "Tola" -> 11.6638; "Ounce" -> 31.1035; "Milligram" -> 0.001; else -> 1.0
@@ -162,7 +165,7 @@ fun SilverCalculatorScreen(
                         ) {
                             OutlinedTextField(
                                 value = customRateInput,
-                                onValueChange = { customRateInput = it },
+                                onValueChange = { customRateInput = com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatInput(it) },
                                 label = { Text("Rate ($currency/Gram)") },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                 colors = OutlinedTextFieldDefaults.colors(
@@ -173,8 +176,8 @@ fun SilverCalculatorScreen(
                             )
                             IconButton(onClick = {
                                 isEditingRate = false; focusManager.clearFocus()
-                                if (customRateInput.toDoubleOrNull() == null)
-                                    customRateInput = String.format(java.util.Locale.US, "%.2f", currentRatePerGram)
+                                if (com.goldsilver.livecalc.util.IndianCurrencyFormatter.parseAmount(customRateInput) <= 0.0)
+                                    customRateInput = com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(currentRatePerGram)
                             }) {
                                 Icon(Icons.Default.Check, contentDescription = "Confirm", tint = SilverPrimary)
                             }
@@ -245,7 +248,11 @@ fun SilverCalculatorScreen(
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             OutlinedTextField(
                                 value = weightInput,
-                                onValueChange = { weightInput = it },
+                                onValueChange = { newValue -> 
+                                    if (newValue.length <= 10 && newValue.count { it == '.' } <= 1) {
+                                        weightInput = newValue 
+                                    }
+                                },
                                 label = { Text("Weight") },
                                 placeholder = { Text("Enter weight", color = TextSecondary.copy(alpha = 0.5f)) },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -302,14 +309,16 @@ fun SilverCalculatorScreen(
                                             .clip(RoundedCornerShape(10.dp))
                                             .background(bgColor)
                                             .clickable {
-                                                selectedPurity = purity; isEditingRate = false; focusManager.clearFocus()
-                                                customRateInput = String.format(java.util.Locale.US, "%.2f", when (purity) { "999" -> price999; "925" -> price925; else -> price900 })
-                                            },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(label, color = textColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, textAlign = TextAlign.Center, lineHeight = 14.sp)
-                                    }
-                                }
+                                                 isEditingRate = false; focusManager.clearFocus()
+                                                 customRateInput = com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(
+                                                     when (purity) { "999" -> price999; "925" -> price925; else -> price900 }
+                                                 )
+                                             },
+                                         contentAlignment = Alignment.Center
+                                     ) {
+                                         Text(label, color = textColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, textAlign = TextAlign.Center, lineHeight = 14.sp)
+                                     }
+                                 }
                             }
                         }
 
@@ -318,12 +327,13 @@ fun SilverCalculatorScreen(
                             OutlinedTextField(
                                 value = makingChargeInput,
                                 onValueChange = { newValue ->
-                                    if (isPercentageCharge) {
-                                        val num = newValue.toDoubleOrNull()
-                                        if (newValue.isEmpty() || (num != null && num <= 100.0)) makingChargeInput = newValue
-                                    } else {
-                                        val digits = newValue.filter { it.isDigit() }
-                                        if (digits.length <= 12) makingChargeInput = newValue
+                                    if (newValue.length <= 12 && newValue.count { it == '.' } <= 1) {
+                                        if (isPercentageCharge) {
+                                            val num = newValue.toDoubleOrNull()
+                                            if (newValue.isEmpty() || (num != null && num <= 100.0)) makingChargeInput = newValue
+                                        } else {
+                                            makingChargeInput = com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatInput(newValue)
+                                        }
                                     }
                                 },
                                 label = { Text(if (isPercentageCharge) "Making Charge (%)" else "Making Charge ($currency)", fontSize = 11.sp) },
@@ -371,8 +381,10 @@ fun SilverCalculatorScreen(
                             OutlinedTextField(
                                 value = gstInput,
                                 onValueChange = { newValue ->
-                                    val num = newValue.toDoubleOrNull()
-                                    if (newValue.isEmpty() || (num != null && num <= 50.0)) gstInput = newValue
+                                    if (newValue.length <= 6 && newValue.count { it == '.' } <= 1) {
+                                        val num = newValue.toDoubleOrNull()
+                                        if (newValue.isEmpty() || (num != null && num <= 50.0)) gstInput = newValue
+                                    }
                                 },
                                 label = { Text("GST (%)") },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -444,7 +456,7 @@ fun SilverCalculatorScreen(
                         onClick = {
                             weightInput = ""; makingChargeInput = ""; gstInput = "3"
                             selectedPurity = "999"; isPercentageCharge = true; hasCalculated = false
-                            customRateInput = String.format(java.util.Locale.US, "%.2f", price999)
+                            customRateInput = com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(price999)
                             focusManager.clearFocus()
                         },
                         modifier = Modifier.weight(1f).height(52.dp),
@@ -481,33 +493,5 @@ private fun BreakdownRow(icon: String, label: String, value: String) {
 }
 
 private fun formatIndianStyle(value: Double): String {
-    val isNegative = value < 0
-    val absValue = kotlin.math.abs(value)
-    val formattedStr = String.format(java.util.Locale.US, "%.2f", absValue)
-    val parts = formattedStr.split(".")
-    val integerPart = parts[0]
-    val decimalPart = parts.getOrNull(1) ?: "00"
-
-    val len = integerPart.length
-    val formattedInteger = if (len <= 3) {
-        integerPart
-    } else {
-        val lastThree = integerPart.substring(len - 3)
-        val remaining = integerPart.substring(0, len - 3)
-        val sb = StringBuilder()
-        var i = remaining.length
-        while (i > 0) {
-            val start = (i - 2).coerceAtLeast(0)
-            val chunk = remaining.substring(start, i)
-            if (sb.isNotEmpty()) {
-                sb.insert(0, ",")
-            }
-            sb.insert(0, chunk)
-            i -= 2
-        }
-        "${sb},$lastThree"
-    }
-    
-    val prefix = if (isNegative) "-" else ""
-    return "$prefix$formattedInteger.$decimalPart"
+    return com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(value)
 }

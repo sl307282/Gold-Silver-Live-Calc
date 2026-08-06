@@ -33,6 +33,7 @@ import com.goldsilver.livecalc.ui.theme.*
 import com.goldsilver.livecalc.ui.viewmodel.GoldSilverViewModel
 import java.text.SimpleDateFormat
 import java.util.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,11 +42,11 @@ fun PriceAlertsScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val alerts by viewModel.alerts.collectAsState()
-    val currency by viewModel.currency.collectAsState()
-    val isPremium by viewModel.isPremium.collectAsState()
-    val latestRate by viewModel.latestRate.collectAsState()
-    val isNotificationsEnabled by viewModel.isNotificationsEnabled.collectAsState()
+    val alerts by viewModel.alerts.collectAsStateWithLifecycle()
+    val currency by viewModel.currency.collectAsStateWithLifecycle()
+    val isPremium by viewModel.isPremium.collectAsStateWithLifecycle()
+    val latestRate by viewModel.latestRate.collectAsStateWithLifecycle()
+    val isNotificationsEnabled by viewModel.isNotificationsEnabled.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -174,11 +175,11 @@ fun PriceAlertsScreen(
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text("Current Gold (24K)", color = TextSecondary, fontSize = 12.sp)
-                            Text(String.format("%.2f %s", currentGoldPrice, currency), color = GoldPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            Text("${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(currentGoldPrice)} $currency", color = GoldPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                         }
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text("Current Silver", color = TextSecondary, fontSize = 12.sp)
-                            Text(String.format("%.2f %s", currentSilverPrice, currency), color = SilverPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            Text("${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(currentSilverPrice)} $currency", color = SilverPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                         }
                     }
                 }
@@ -271,7 +272,7 @@ fun PriceAlertsScreen(
                         // Target Price Input
                         OutlinedTextField(
                             value = targetPriceInput,
-                            onValueChange = { targetPriceInput = it },
+                            onValueChange = { targetPriceInput = com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatInput(it) },
                             label = { Text("Target Price ($currency/Gram)") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             colors = OutlinedTextFieldDefaults.colors(
@@ -288,7 +289,7 @@ fun PriceAlertsScreen(
                         // Save Alert Button
                         Button(
                             onClick = {
-                                val price = targetPriceInput.toDoubleOrNull() ?: 0.0
+                                val price = com.goldsilver.livecalc.util.IndianCurrencyFormatter.parseAmount(targetPriceInput)
                                 if (price > 0) {
                                     // Verify monetization limits: max 1 alert for free tier
                                     if (!isPremium && activeAlerts.size >= 1) {
@@ -487,7 +488,7 @@ fun AlertItem(
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "$metalName $conditionSymbol ${String.format("%.2f", alert.targetPrice)} $currency",
+                            text = "$metalName $conditionSymbol ${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(alert.targetPrice)} $currency",
                             color = TextPrimary,
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp

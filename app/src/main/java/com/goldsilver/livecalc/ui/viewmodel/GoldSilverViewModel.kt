@@ -60,6 +60,9 @@ class GoldSilverViewModel(application: Application) : AndroidViewModel(applicati
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
+    private val _isInitialLoadComplete = MutableStateFlow(false)
+    val isInitialLoadComplete: StateFlow<Boolean> = _isInitialLoadComplete.asStateFlow()
+
     // Settings States
     val currency = MutableStateFlow(sharedPrefs.getString("currency", "INR") ?: "INR")
     val language = MutableStateFlow(sharedPrefs.getString("language", "English") ?: "English")
@@ -161,6 +164,7 @@ class GoldSilverViewModel(application: Application) : AndroidViewModel(applicati
                     android.widget.Toast.LENGTH_SHORT
                 ).show()
             }
+            _isInitialLoadComplete.value = true
             return
         }
 
@@ -181,6 +185,7 @@ class GoldSilverViewModel(application: Application) : AndroidViewModel(applicati
             } else {
                 _isLoading.value = false
             }
+            _isInitialLoadComplete.value = true
         }
     }
 

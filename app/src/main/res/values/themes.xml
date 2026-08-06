@@ -2,18 +2,17 @@
 <resources>
     <!-- Base application theme. -->
     <style name="Theme.GoldSilverLiveCalc" parent="Theme.AppCompat.NoActionBar">
-        <item name="android:statusBarColor">#121212</item>
-        <item name="android:navigationBarColor">#121212</item>
+        <item name="android:statusBarColor">#050505</item>
+        <item name="android:navigationBarColor">#050505</item>
+        <item name="android:windowBackground">#050505</item>
         <item name="android:windowLightStatusBar" tools:targetApi="m" xmlns:tools="http://schemas.android.com/tools">false</item>
     </style>
 
-    <!-- Theme for Splash Screen API (Android 12+) -->
-    <style name="Theme.GoldSilverLiveCalc.Splash" parent="Theme.SplashScreen">
-        <!-- Set the splash screen background to dark #0D0E15 (matching Compose background theme) -->
-        <item name="windowSplashScreenBackground">#0D0E15</item>
-        <!-- Use custom sized splash icon -->
-        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_icon</item>
-        <!-- The theme to transition to after the splash screen finishes -->
-        <item name="postSplashScreenTheme">@style/Theme.GoldSilverLiveCalc</item>
+    <!-- Legacy Splash Screen Theme (Android 11 and below) -->
+    <!-- Bypasses AndroidX core-splashscreen because it doesn't support bottom branding -->
+    <style name="Theme.GoldSilverLiveCalc.Splash" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">@drawable/splash_background_legacy</item>
+        <item name="android:statusBarColor">#000000</item>
+        <item name="android:navigationBarColor">#000000</item>
     </style>
 </resources>

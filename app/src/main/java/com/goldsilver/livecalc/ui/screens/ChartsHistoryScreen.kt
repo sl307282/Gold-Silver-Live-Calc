@@ -25,6 +25,7 @@ import com.goldsilver.livecalc.ui.viewmodel.GoldSilverViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -33,9 +34,9 @@ fun ChartsHistoryScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val historicalRates by viewModel.historicalRates.collectAsState()
-    val currency by viewModel.currency.collectAsState()
-    val isPremium by viewModel.isPremium.collectAsState()
+    val historicalRates by viewModel.historicalRates.collectAsStateWithLifecycle()
+    val currency by viewModel.currency.collectAsStateWithLifecycle()
+    val isPremium by viewModel.isPremium.collectAsStateWithLifecycle()
 
     var isGoldSelected by remember { mutableStateOf(true) }
     var selectedRange by remember { mutableStateOf("7D") } // 7D, 30D, 1Y
@@ -317,7 +318,7 @@ fun ChartsHistoryScreen(
                             ) {
                                 Text("Highest Rate", color = TextSecondary, fontSize = 13.sp)
                                 Text(
-                                    text = String.format("%.2f %s/g", maxPrice, currency),
+                                    text = "${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(maxPrice)} $currency/g",
                                     color = AccentGreen,
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 14.sp
@@ -329,7 +330,7 @@ fun ChartsHistoryScreen(
                             ) {
                                 Text("Lowest Rate", color = TextSecondary, fontSize = 13.sp)
                                 Text(
-                                    text = String.format("%.2f %s/g", minPrice, currency),
+                                    text = "${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(minPrice)} $currency/g",
                                     color = AccentRed,
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 14.sp
@@ -341,7 +342,7 @@ fun ChartsHistoryScreen(
                             ) {
                                 Text("Average Price", color = TextSecondary, fontSize = 13.sp)
                                 Text(
-                                    text = String.format("%.2f %s/g", avgPrice, currency),
+                                    text = "${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(avgPrice)} $currency/g",
                                     color = TextPrimary,
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 14.sp

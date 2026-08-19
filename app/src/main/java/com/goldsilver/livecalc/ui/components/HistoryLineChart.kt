@@ -11,7 +11,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlin.math.roundToInt
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
@@ -44,6 +49,7 @@ fun HistoryLineChart(
     }
 
     val prices = points.map { it.second }
+    val currentPrice = prices.lastOrNull() ?: 0.0
     val maxPrice = prices.maxOrNull() ?: 0.0
     val minPrice = prices.minOrNull() ?: 0.0
     val maxIndex = prices.indexOf(maxPrice)
@@ -74,37 +80,65 @@ fun HistoryLineChart(
             .background(DarkSurface, RoundedCornerShape(12.dp))
             .padding(16.dp)
     ) {
-        // High/Low header indicator
+        // High/Low/Current header indicator
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Bottom
         ) {
-            Column {
-                Text("HIGH", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+            Column(horizontalAlignment = Alignment.Start) {
+                Text("LOW", style = MaterialTheme.typography.labelSmall, color = TextMuted)
                 Text(
-                    text = "${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(maxPrice)} $currency",
-                    fontSize = 15.sp,
+                    text = "${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(minPrice)}",
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
-                    color = AccentGreen
+                    color = AccentRed
+                )
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("CURRENT RATE", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+                Text(
+                    text = "${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(currentPrice)} $currency",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = lineColor
                 )
             }
             Column(horizontalAlignment = Alignment.End) {
-                Text("LOW", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+                Text("HIGH", style = MaterialTheme.typography.labelSmall, color = TextMuted)
                 Text(
-                    text = "${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(minPrice)} $currency",
-                    fontSize = 15.sp,
+                    text = "${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(maxPrice)}",
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
-                    color = AccentRed
+                    color = AccentGreen
                 )
             }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        var selectedIndex by remember(points) { mutableStateOf<Int?>(null) }
+
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
+                .pointerInput(points) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            if (event.changes.any { it.pressed }) {
+                                val position = event.changes.first().position
+                                val width = size.width
+                                val numPoints = points.size
+                                if (numPoints > 1) {
+                                    val spacing = width / (numPoints - 1)
+                                    selectedIndex = (position.x / spacing).roundToInt().coerceIn(0, numPoints - 1)
+                                }
+                            }
+                        }
+                    }
+                }
         ) {
             val width = size.width
             val height = size.height
@@ -273,6 +307,90 @@ fun HistoryLineChart(
                         y = (lowOffset.y + 15f).coerceIn(0f, chartHeight - lowTextResult.size.height)
                     )
                 )
+            }
+
+            // Selection indicator & Tooltip
+            selectedIndex?.let { index ->
+                if (index in screenPoints.indices) {
+                    val selectedOffset = screenPoints[index]
+                    val selectedPoint = points[index]
+
+                    // Vertical guide line
+                    drawLine(
+                        color = TextMuted.copy(alpha = 0.5f),
+                        start = Offset(selectedOffset.x, 0f),
+                        end = Offset(selectedOffset.x, chartHeight),
+                        strokeWidth = 2f,
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
+                    )
+
+                    // Selection dot
+                    drawCircle(
+                        color = lineColor,
+                        radius = 16f,
+                        center = selectedOffset
+                    )
+                    drawCircle(
+                        color = DarkBackground,
+                        radius = 8f,
+                        center = selectedOffset
+                    )
+
+                    // Tooltip Format
+                    val tooltipDate = SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(selectedPoint.first))
+                    val tooltipRate = "${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(selectedPoint.second)} $currency/g"
+                    
+                    val dateResult = textMeasurer.measure(
+                        text = AnnotatedString(tooltipDate),
+                        style = TextStyle(color = TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                    )
+                    val rateResult = textMeasurer.measure(
+                        text = AnnotatedString(tooltipRate),
+                        style = TextStyle(color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    )
+
+                    val tooltipPadding = 24f
+                    val boxWidth = maxOf(dateResult.size.width, rateResult.size.width) + tooltipPadding * 2
+                    val boxHeight = dateResult.size.height + rateResult.size.height + tooltipPadding * 1.5f
+
+                    // Calculate Box Position (Prevent clipping)
+                    var boxX = selectedOffset.x - boxWidth / 2f
+                    boxX = boxX.coerceIn(0f, width - boxWidth)
+                    
+                    var boxY = selectedOffset.y - boxHeight - 30f
+                    if (boxY < 0f) {
+                        boxY = selectedOffset.y + 30f // Display below if cuts off at top
+                    }
+
+                    // Draw Tooltip Box
+                    drawRoundRect(
+                        color = DarkSurface,
+                        topLeft = Offset(boxX, boxY),
+                        size = androidx.compose.ui.geometry.Size(boxWidth, boxHeight),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(16f, 16f)
+                    )
+                    drawRoundRect(
+                        color = lineColor.copy(alpha = 0.5f),
+                        topLeft = Offset(boxX, boxY),
+                        size = androidx.compose.ui.geometry.Size(boxWidth, boxHeight),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(16f, 16f),
+                        style = Stroke(width = 2f)
+                    )
+
+                    // Draw Tooltip Text
+                    val textX = boxX + tooltipPadding
+                    val dateY = boxY + tooltipPadding * 0.5f
+                    val rateY = dateY + dateResult.size.height + 4f
+
+                    drawText(
+                        textLayoutResult = dateResult,
+                        topLeft = Offset(textX, dateY)
+                    )
+                    drawText(
+                        textLayoutResult = rateResult,
+                        topLeft = Offset(textX, rateY)
+                    )
+                }
             }
         }
     }

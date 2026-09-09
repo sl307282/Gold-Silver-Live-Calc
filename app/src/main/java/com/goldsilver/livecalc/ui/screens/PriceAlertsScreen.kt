@@ -332,11 +332,12 @@ fun PriceAlertsScreen(
                                     val selectedMetal = if (isGold) "GOLD" else "SILVER"
                                     val metalLabel = if (isGold) "Gold" else "Silver"
                                     val selectedCondition = if (isAboveCondition) "ABOVE" else "BELOW"
-                                    val formattedPrice = "${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(price)} $currency"
+                                    val conditionLabel = if (isAboveCondition) "Goes Above (≥)" else "Goes Below (≤)"
 
-                                    // Check if duplicate alert exists for same metal & target price
+                                    // Check if duplicate alert exists for same metal, target price, and condition
                                     val isDuplicate = activeAlerts.any { alert ->
                                         alert.metal.equals(selectedMetal, ignoreCase = true) &&
+                                        alert.condition.equals(selectedCondition, ignoreCase = true) &&
                                         Math.abs(alert.targetPrice - price) < 0.001
                                     }
 
@@ -346,7 +347,7 @@ fun PriceAlertsScreen(
                                         android.widget.Toast.makeText(context, "⚠️ $duplicateMsg", android.widget.Toast.LENGTH_LONG).show()
                                         alertDialogData = AlertDialogData(
                                             title = "Target Price Already Set",
-                                            message = "Target price already set. A price alert for $metalLabel at $formattedPrice/g is already set and active.",
+                                            message = "A price alert for $metalLabel ($conditionLabel) at $formattedPrice/g is already set and active.",
                                             isSuccess = false
                                         )
                                     } else if (!isPremium && activeAlerts.size >= 1) {
@@ -366,7 +367,7 @@ fun PriceAlertsScreen(
                                         android.widget.Toast.makeText(context, "✅ $successMsg", android.widget.Toast.LENGTH_LONG).show()
                                         alertDialogData = AlertDialogData(
                                             title = "Target Price Set Successfully",
-                                            message = "Target price $formattedPrice/g set successfully for $metalLabel.",
+                                            message = "Target price $formattedPrice/g ($conditionLabel) set successfully for $metalLabel.",
                                             isSuccess = true
                                         )
                                     }

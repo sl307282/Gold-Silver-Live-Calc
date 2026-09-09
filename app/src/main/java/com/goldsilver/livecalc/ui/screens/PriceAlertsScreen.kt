@@ -333,6 +333,7 @@ fun PriceAlertsScreen(
                                     val metalLabel = if (isGold) "Gold" else "Silver"
                                     val selectedCondition = if (isAboveCondition) "ABOVE" else "BELOW"
                                     val conditionLabel = if (isAboveCondition) "Goes Above (≥)" else "Goes Below (≤)"
+                                    val formattedPrice = "${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(price)} $currency"
 
                                     // Check if duplicate alert exists for same metal, target price, and condition
                                     val isDuplicate = activeAlerts.any { alert ->

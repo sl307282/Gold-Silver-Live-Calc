@@ -7,38 +7,24 @@ import androidx.core.animation.doOnEnd
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.activity.viewModels
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.goldsilver.livecalc.ota.OtaState
+import com.goldsilver.livecalc.ui.components.AppUpdateDialog
 import com.goldsilver.livecalc.ui.components.CustomBottomNavigation
 import com.goldsilver.livecalc.ui.screens.*
 import com.goldsilver.livecalc.ui.theme.GoldSilverLiveCalcTheme
 import com.goldsilver.livecalc.ui.viewmodel.GoldSilverViewModel
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 class MainActivity : ComponentActivity() {
@@ -97,219 +83,52 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            GoldSilverLiveCalcTheme {
-                val navController = rememberNavController()
-                val context = LocalContext.current
+            val language by viewModel.language.collectAsStateWithLifecycle()
+            val appStrings = remember(language) { com.goldsilver.livecalc.util.getAppStrings(language) }
+            val isRtl = remember(language) { com.goldsilver.livecalc.util.isRtlLanguage(language) }
+            val layoutDirection = if (isRtl) androidx.compose.ui.unit.LayoutDirection.Rtl else androidx.compose.ui.unit.LayoutDirection.Ltr
 
-                val navBackStackEntry by navController.currentBackStackEntryAsState()
-                val currentRoute = navBackStackEntry?.destination?.route ?: "dashboard"
+            CompositionLocalProvider(
+                com.goldsilver.livecalc.util.LocalAppStrings provides appStrings,
+                androidx.compose.ui.platform.LocalLayoutDirection provides layoutDirection
+            ) {
+                GoldSilverLiveCalcTheme {
+                    val navController = rememberNavController()
+                    val context = LocalContext.current
+
+                    val navBackStackEntry by navController.currentBackStackEntryAsState()
+                    val currentRoute = navBackStackEntry?.destination?.route ?: "dashboard"
+
+                val permissionLauncher = rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.RequestPermission()
+                ) { isGranted ->
+                    if (isGranted) {
+                        viewModel.setNotificationsEnabled(true)
+                    }
+                }
+
+                LaunchedEffect(Unit) {
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                        val hasPermission = androidx.core.content.ContextCompat.checkSelfPermission(
+                            context,
+                            android.Manifest.permission.POST_NOTIFICATIONS
+                        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+                        if (!hasPermission) {
+                            permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                    }
+                }
 
                 val showUpdateDialog by viewModel.showUpdateDialog.collectAsStateWithLifecycle()
                 val latestVersionName by viewModel.latestVersionName.collectAsStateWithLifecycle()
                 val updateMessage by viewModel.updateMessage.collectAsStateWithLifecycle()
-                val otaState by viewModel.otaState.collectAsStateWithLifecycle()
-                val otaProgress by viewModel.otaProgress.collectAsStateWithLifecycle()
-                val otaError by viewModel.otaError.collectAsStateWithLifecycle()
-                val apkDownloadUrl by viewModel.apkDownloadUrl.collectAsStateWithLifecycle()
-
-                // Animated progress for smooth progress bar
-                val animatedProgress by animateFloatAsState(
-                    targetValue = otaProgress,
-                    animationSpec = tween(durationMillis = 300),
-                    label = "ota_progress"
-                )
 
                 if (showUpdateDialog) {
-                    AlertDialog(
-                        onDismissRequest = {
-                            // Block dismissal while downloading
-                            if (otaState != OtaState.DOWNLOADING) {
-                                viewModel.dismissUpdateDialog()
-                            }
-                        },
-                        title = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = when (otaState) {
-                                        OtaState.READY -> Icons.Default.CheckCircle
-                                        OtaState.ERROR -> Icons.Default.ErrorOutline
-                                        else -> Icons.Default.SystemUpdate
-                                    },
-                                    contentDescription = "Update",
-                                    tint = when (otaState) {
-                                        OtaState.READY -> Color(0xFF4CAF50)
-                                        OtaState.ERROR -> Color(0xFFEF5350)
-                                        else -> com.goldsilver.livecalc.ui.theme.GoldPrimary
-                                    },
-                                    modifier = Modifier.size(28.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = when (otaState) {
-                                        OtaState.DOWNLOADING -> "Downloading Update…"
-                                        OtaState.READY -> "Ready to Install!"
-                                        OtaState.ERROR -> "Download Failed"
-                                        else -> "Update Available!"
-                                    },
-                                    color = when (otaState) {
-                                        OtaState.READY -> Color(0xFF4CAF50)
-                                        OtaState.ERROR -> Color(0xFFEF5350)
-                                        else -> com.goldsilver.livecalc.ui.theme.GoldPrimary
-                                    },
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        },
-                        text = {
-                            Column(
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                when (otaState) {
-                                    OtaState.IDLE -> {
-                                        val isPlayStoreUrl = apkDownloadUrl.contains("play.google.com") || apkDownloadUrl.contains("market://")
-                                        Text(
-                                            text = updateMessage.ifBlank {
-                                                "Gold & Silver Live Calc v$latestVersionName is available with the latest market rates and improvements."
-                                            },
-                                            color = com.goldsilver.livecalc.ui.theme.TextPrimary,
-                                            fontSize = 14.sp
-                                        )
-                                        if (apkDownloadUrl.isNotBlank() && !isPlayStoreUrl) {
-                                            Text(
-                                                text = "Tap \"Download & Install\" to update instantly — no Play Store needed.",
-                                                color = com.goldsilver.livecalc.ui.theme.TextSecondary,
-                                                fontSize = 12.sp
-                                            )
-                                        }
-                                    }
-                                    OtaState.DOWNLOADING -> {
-                                        Text(
-                                            text = "Downloading v$latestVersionName…",
-                                            color = com.goldsilver.livecalc.ui.theme.TextPrimary,
-                                            fontSize = 14.sp
-                                        )
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        LinearProgressIndicator(
-                                            progress = { animatedProgress },
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .height(8.dp),
-                                            color = com.goldsilver.livecalc.ui.theme.GoldPrimary,
-                                            trackColor = com.goldsilver.livecalc.ui.theme.GoldPrimary.copy(alpha = 0.2f),
-                                            strokeCap = StrokeCap.Round
-                                        )
-                                        Text(
-                                            text = "${(animatedProgress * 100).toInt()}%",
-                                            color = com.goldsilver.livecalc.ui.theme.GoldPrimary,
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            textAlign = TextAlign.End,
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-                                        Text(
-                                            text = "Please keep the app open until the download completes.",
-                                            color = com.goldsilver.livecalc.ui.theme.TextMuted,
-                                            fontSize = 11.sp
-                                        )
-                                    }
-                                    OtaState.READY -> {
-                                        LinearProgressIndicator(
-                                            progress = { 1f },
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .height(8.dp),
-                                            color = Color(0xFF4CAF50),
-                                            trackColor = Color(0xFF4CAF50).copy(alpha = 0.2f),
-                                            strokeCap = StrokeCap.Round
-                                        )
-                                        Text(
-                                            text = "v$latestVersionName downloaded successfully! Tap \"Install Now\" to complete the update.",
-                                            color = com.goldsilver.livecalc.ui.theme.TextPrimary,
-                                            fontSize = 14.sp
-                                        )
-                                    }
-                                    OtaState.ERROR -> {
-                                        Text(
-                                            text = otaError ?: "An unexpected error occurred during download.",
-                                            color = Color(0xFFEF5350),
-                                            fontSize = 13.sp
-                                        )
-                                        Text(
-                                            text = "You can try again or visit the Play Store to update.",
-                                            color = com.goldsilver.livecalc.ui.theme.TextSecondary,
-                                            fontSize = 12.sp
-                                        )
-                                    }
-                                }
-                            }
-                        },
-                        confirmButton = {
-                            val isPlayStoreUrl = apkDownloadUrl.contains("play.google.com") || apkDownloadUrl.contains("market://")
-                            Button(
-                                onClick = {
-                                    when (otaState) {
-                                        OtaState.IDLE -> {
-                                            if (apkDownloadUrl.isNotBlank() && !isPlayStoreUrl) {
-                                                viewModel.startOtaDownload()
-                                            } else {
-                                                // Redirect to Play Store
-                                                val targetUrl = apkDownloadUrl.ifBlank { "market://details?id=com.goldsilver.livecalc" }
-                                                val intent = android.content.Intent(
-                                                    android.content.Intent.ACTION_VIEW,
-                                                    android.net.Uri.parse(targetUrl)
-                                                ).apply { addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK) }
-                                                try { startActivity(intent) } catch (e: Exception) {
-                                                    startActivity(android.content.Intent(
-                                                        android.content.Intent.ACTION_VIEW,
-                                                        android.net.Uri.parse("https://play.google.com/store/apps/details?id=com.goldsilver.livecalc")
-                                                    ).apply { addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK) })
-                                                }
-                                                viewModel.dismissUpdateDialog()
-                                            }
-                                        }
-                                        OtaState.READY -> viewModel.installOta(context)
-                                        OtaState.ERROR -> viewModel.startOtaDownload() // Retry
-                                        OtaState.DOWNLOADING -> { /* Do nothing — wait */ }
-                                    }
-                                },
-                                enabled = otaState != OtaState.DOWNLOADING,
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = when (otaState) {
-                                        OtaState.READY -> Color(0xFF4CAF50)
-                                        OtaState.ERROR -> com.goldsilver.livecalc.ui.theme.GoldPrimary
-                                        else -> com.goldsilver.livecalc.ui.theme.GoldPrimary
-                                    }
-                                )
-                            ) {
-                                Text(
-                                    text = when (otaState) {
-                                        OtaState.IDLE -> if (apkDownloadUrl.isNotBlank() && !isPlayStoreUrl) "Download & Install" else "Update Now"
-                                        OtaState.DOWNLOADING -> "Downloading…"
-                                        OtaState.READY -> "Install Now"
-                                        OtaState.ERROR -> "Retry Download"
-                                    },
-                                    color = com.goldsilver.livecalc.ui.theme.DarkBackground,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        },
-                        dismissButton = {
-                            if (otaState != OtaState.DOWNLOADING) {
-                                TextButton(onClick = { viewModel.cancelOta() }) {
-                                    Text(
-                                        text = "Later",
-                                        color = com.goldsilver.livecalc.ui.theme.TextSecondary
-                                    )
-                                }
-                            }
-                        },
-                        containerColor = com.goldsilver.livecalc.ui.theme.DarkSurface,
-                        shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier.border(
-                            width = 0.5.dp,
-                            color = Color.White.copy(alpha = 0.1f),
-                            shape = RoundedCornerShape(16.dp)
-                        )
+                    AppUpdateDialog(
+                        versionName = latestVersionName,
+                        updateMessage = updateMessage,
+                        onDismiss = { viewModel.dismissUpdateDialog() }
                     )
                 }
 
@@ -399,4 +218,5 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+}
 }

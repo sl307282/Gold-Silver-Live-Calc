@@ -66,18 +66,47 @@ class GoldSilverViewModel(application: Application) : AndroidViewModel(applicati
     // Settings States
     val currency = MutableStateFlow(sharedPrefs.getString("currency", "INR") ?: "INR")
     val language = MutableStateFlow(sharedPrefs.getString("language", "English") ?: "English")
-    val isNotificationsEnabled = MutableStateFlow(sharedPrefs.getBoolean("notifications_enabled", false))
+    val isNotificationsEnabled = MutableStateFlow(sharedPrefs.getBoolean("notifications_enabled", true))
     val isPremium = MutableStateFlow(true)
     val isDarkMode = MutableStateFlow(sharedPrefs.getBoolean("dark_mode", true))
     val backgroundTheme = MutableStateFlow(sharedPrefs.getString("background_theme", "Night") ?: "Night")
     val firebaseDatabaseUrl = MutableStateFlow(sharedPrefs.getString("firebase_db_url", "https://gold-silver-live-calc-default-rtdb.firebaseio.com/") ?: "https://gold-silver-live-calc-default-rtdb.firebaseio.com/")
 
-    // Rates Data
-    val latestRate: StateFlow<RateEntity?> = repository.getLatestRateFlow()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    // Rates Data per selected currency
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val latestRate: StateFlow<RateEntity?> = currency.flatMapLatest { curr ->
+        repository.getLatestRateForCurrencyFlow(curr)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    val historicalRates: StateFlow<List<RateEntity>> = repository.getHistoricalRatesFlow()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val historicalRates: StateFlow<List<RateEntity>> = currency.flatMapLatest { curr ->
+        repository.getHistoricalRatesForCurrencyFlow(curr)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // Previous Trading Day Reference Rate (strictly prior to current displayed rate's date)
+    val previousTradingDayRate: StateFlow<RateEntity?> = combine(latestRate, historicalRates) { latest, history ->
+        findPreviousTradingDayRate(latest, history)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    // Percentage change vs Previous Trading Day Close (Gold)
+    val goldChangePercent: StateFlow<Double?> = combine(latestRate, previousTradingDayRate) { latest, prev ->
+        if (latest != null && latest.goldPrice24k > 0) {
+            val prevPrice = latest.prevTradingDayGoldPrice ?: prev?.goldPrice24k
+            if (prevPrice != null && prevPrice > 0) {
+                ((latest.goldPrice24k - prevPrice) / prevPrice) * 100.0
+            } else null
+        } else null
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    // Percentage change vs Previous Trading Day Close (Silver)
+    val silverChangePercent: StateFlow<Double?> = combine(latestRate, previousTradingDayRate) { latest, prev ->
+        if (latest != null && latest.silverPrice > 0) {
+            val prevPrice = latest.prevTradingDaySilverPrice ?: prev?.silverPrice
+            if (prevPrice != null && prevPrice > 0) {
+                ((latest.silverPrice - prevPrice) / prevPrice) * 100.0
+            } else null
+        } else null
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val apiError: StateFlow<String?> = repository.apiError
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
@@ -85,6 +114,34 @@ class GoldSilverViewModel(application: Application) : AndroidViewModel(applicati
     // Alerts Data
     val alerts: StateFlow<List<AlertEntity>> = repository.getAllAlertsFlow()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /**
+     * Finds the immediately preceding valid stored rate record strictly before the given current rate's date.
+     * If a calendar day has no stored market rate (weekends/holidays), it finds the latest previous available market day.
+     * Returns null if no previous day's rate is stored in the database.
+     */
+    private fun findPreviousTradingDayRate(currentRate: RateEntity?, historyList: List<RateEntity>): RateEntity? {
+        if (currentRate == null || historyList.isEmpty()) return null
+
+        val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+        val currentDateStr = currentRate.date ?: dateFormat.format(java.util.Date(currentRate.timestamp))
+        val targetCurrency = currentRate.currency
+
+        // Filter for matching currency and strictly prior date
+        val priorRates = historyList
+            .filter { it.currency.equals(targetCurrency, ignoreCase = true) }
+            .filter { 
+                val rateDateStr = it.date ?: dateFormat.format(java.util.Date(it.timestamp))
+                rateDateStr < currentDateStr
+            }
+            .filter { it.goldPrice24k > 0 && it.silverPrice > 0 }
+            .sortedByDescending { it.timestamp }
+
+        if (priorRates.isEmpty()) return null
+
+        // Pick the closing/latest rate of that immediately preceding market day
+        return priorRates.first()
+    }
 
     // Hallmark Verification Data
     val verifications: StateFlow<List<VerificationEntity>> = repository.getAllVerificationsFlow()
@@ -117,35 +174,18 @@ class GoldSilverViewModel(application: Application) : AndroidViewModel(applicati
         repository.firebaseDatabaseUrl = firebaseDatabaseUrl.value
 
         viewModelScope.launch {
-            if (!sharedPrefs.getBoolean("rates_db_cleared_for_indian_premium_v2", false)) {
+            // One-time migration: wipe any legacy fake/randomly seeded data so history is 100% real
+            if (!sharedPrefs.getBoolean("pure_real_data_v1", false)) {
                 repository.clearAllRates()
-                sharedPrefs.edit().putBoolean("rates_db_cleared_for_indian_premium_v2", true).apply()
+                sharedPrefs.edit()
+                    .putBoolean("pure_real_data_v1", true)
+                    .apply()
             }
-            // Seed base 30 days data if DB is empty
-            repository.seedHistoricalDataIfEmpty(currency.value)
-            // Fetch newest rate
+            // Fetch live rate & real Firebase history
             refreshRates(force = false)
-        }
-
-        // Check for app updates every time the app starts
-        viewModelScope.launch {
-            try {
-                val config = repository.fetchRemoteConfig()
-                val latestCode = config["latest_version_code"] as? Int ?: 1
-                val latestName = config["latest_version"] as? String ?: "1.0.0"
-                val message = config["update_message"] as? String ?: ""
-                val apkUrl = config["apk_download_url"] as? String ?: ""
-
-                if (latestCode > com.goldsilver.livecalc.BuildConfig.VERSION_CODE) {
-                    _latestVersionCode.value = latestCode
-                    _latestVersionName.value = latestName
-                    _updateMessage.value = message
-                    _apkDownloadUrl.value = apkUrl
-                    _showUpdateDialog.value = true
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+            // Check for app updates
+            kotlinx.coroutines.delay(500L)
+            checkForAppUpdate(silent = true)
         }
     }
 
@@ -287,10 +327,62 @@ class GoldSilverViewModel(application: Application) : AndroidViewModel(applicati
 
     fun dismissUpdateDialog() {
         _showUpdateDialog.value = false
-        // If user dismisses while not yet downloading, reset state
-        if (_otaState.value == OtaState.IDLE || _otaState.value == OtaState.ERROR) {
-            _otaProgress.value = 0f
-            _otaError.value = null
+    }
+
+    /**
+     * Checks for app updates via Firebase Remote Config.
+     * @param silent If true, suppresses Toast notifications when app is up to date or network fails.
+     * @param context Context for displaying Toast messages during manual checks from Settings.
+     */
+    fun checkForAppUpdate(silent: Boolean = true, context: Context? = null) {
+        viewModelScope.launch {
+            try {
+                val config = repository.fetchRemoteConfig()
+                val latestCode = config["latest_version_code"] as? Int ?: 1
+                val latestName = config["latest_version"] as? String ?: "1.0.0"
+                val message = config["update_message"] as? String ?: ""
+                val apkUrl = config["apk_download_url"] as? String ?: ""
+
+                val currentCode = com.goldsilver.livecalc.BuildConfig.VERSION_CODE
+                val currentName = com.goldsilver.livecalc.BuildConfig.VERSION_NAME
+
+                val isNewerCode = latestCode > currentCode
+                val isNewerName = isVersionOutdated(currentName, latestName)
+
+                if (isNewerCode || isNewerName) {
+                    _latestVersionCode.value = latestCode
+                    
+                    // Accurately determine the display version name
+                    val displayVersion = when {
+                        isNewerName -> latestName.trim().removePrefix("v").removePrefix("V")
+                        isNewerCode && (latestName.isBlank() || latestName.trim().equals(currentName, ignoreCase = true)) -> ""
+                        else -> latestName.trim().removePrefix("v").removePrefix("V")
+                    }
+
+                    _latestVersionName.value = displayVersion
+                    _updateMessage.value = message
+                    _apkDownloadUrl.value = apkUrl
+                    _showUpdateDialog.value = true
+                } else {
+                    _showUpdateDialog.value = false
+                    if (!silent && context != null) {
+                        android.widget.Toast.makeText(
+                            context,
+                            "You are on the latest version (v$currentName • Build $currentCode / Server $latestCode)",
+                            android.widget.Toast.LENGTH_LONG
+                        ).show()
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                if (!silent && context != null) {
+                    android.widget.Toast.makeText(
+                        context,
+                        "Could not check for updates: ${e.localizedMessage ?: "Unknown error"}",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
         }
     }
 

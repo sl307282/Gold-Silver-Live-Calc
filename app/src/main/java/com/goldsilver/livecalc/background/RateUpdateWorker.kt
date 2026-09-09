@@ -15,7 +15,7 @@ class RateUpdateWorker(
     override suspend fun doWork(): Result {
         val database = AppDatabase.getDatabase(applicationContext)
         val sharedPrefs = applicationContext.getSharedPreferences("gold_silver_prefs", Context.MODE_PRIVATE)
-        val isNotificationsEnabled = sharedPrefs.getBoolean("notifications_enabled", false)
+        val isNotificationsEnabled = sharedPrefs.getBoolean("notifications_enabled", true)
 
         if (!isNotificationsEnabled) {
             BootReceiver.cancelBackgroundWork(applicationContext)

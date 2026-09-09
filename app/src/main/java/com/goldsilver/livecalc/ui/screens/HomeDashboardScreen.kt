@@ -1,6 +1,7 @@
 package com.goldsilver.livecalc.ui.screens
 
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -22,11 +23,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.goldsilver.livecalc.ui.components.PriceChangeIndicator
 import com.goldsilver.livecalc.ui.theme.*
 import com.goldsilver.livecalc.ui.viewmodel.GoldSilverViewModel
+import com.goldsilver.livecalc.util.LocalAppStrings
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -39,32 +42,13 @@ fun HomeDashboardScreen(
     onNavigate: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalAppStrings.current
     val latestRate by viewModel.latestRate.collectAsStateWithLifecycle()
-    val historicalRates by viewModel.historicalRates.collectAsStateWithLifecycle()
+    val goldChange by viewModel.goldChangePercent.collectAsStateWithLifecycle()
+    val silverChange by viewModel.silverChangePercent.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     val currency by viewModel.currency.collectAsStateWithLifecycle()
     val isPremium by viewModel.isPremium.collectAsStateWithLifecycle()
-
-    // Determine change percentages
-    val goldChange = remember(latestRate, historicalRates) {
-        if (historicalRates.size >= 2 && latestRate != null) {
-            val prev = historicalRates[historicalRates.size - 2].goldPrice24k
-            val curr = latestRate!!.goldPrice24k
-            ((curr - prev) / prev) * 100
-        } else {
-            0.18 // default mock positive fluctuation
-        }
-    }
-
-    val silverChange = remember(latestRate, historicalRates) {
-        if (historicalRates.size >= 2 && latestRate != null) {
-            val prev = historicalRates[historicalRates.size - 2].silverPrice
-            val curr = latestRate!!.silverPrice
-            ((curr - prev) / prev) * 100
-        } else {
-            -0.12 // default mock negative fluctuation
-        }
-    }
 
     val lastUpdatedText = remember(latestRate) {
         latestRate?.let {
@@ -104,7 +88,7 @@ fun HomeDashboardScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
-                    Text("Live Rates", color = GoldPrimary, fontWeight = FontWeight.Bold, fontSize = 22.sp)
+                    Text(strings.liveRates, color = GoldPrimary, fontWeight = FontWeight.Bold, fontSize = 22.sp)
                     Spacer(modifier = Modifier.height(2.dp))
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -113,11 +97,11 @@ fun HomeDashboardScreen(
                             .clickable { viewModel.refreshRates(force = true) }
                             .padding(vertical = 2.dp, horizontal = 4.dp)
                     ) {
-                        Text("Updated • $lastUpdatedText", color = TextSecondary, fontSize = 12.sp)
+                        Text("${strings.lastUpdated} • $lastUpdatedText", color = TextSecondary, fontSize = 12.sp)
                         Spacer(modifier = Modifier.width(6.dp))
                         Icon(
                             imageVector = Icons.Default.Refresh,
-                            contentDescription = "Refresh",
+                            contentDescription = strings.refresh,
                             tint = GoldPrimary,
                             modifier = Modifier
                                 .size(14.dp)
@@ -131,151 +115,177 @@ fun HomeDashboardScreen(
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Reduced top spacer
                 item {
                     Spacer(modifier = Modifier.height(2.dp))
                 }
 
-            // Live Gold Card
-            item {
-                latestRate?.let { rate ->
-                    MetalRateCard(
-                        title = "GOLD (XAU)",
-                        primaryPrice = "${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(rate.goldPrice24k)} $currency/g",
-                        changePercent = goldChange,
-                        isGold = true,
-                        purityList = listOf(
-                            "24K (Pure 99.9%)" to rate.goldPrice24k,
-                            "22K (Jewelry 91.6%)" to rate.goldPrice22k,
-                            "18K (Standard 75.0%)" to rate.goldPrice18k,
-                            "14K (Economy 58.3%)" to rate.goldPrice14k
-                        ),
-                        currency = currency
-                    )
-                } ?: run {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(180.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(DarkSurface),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(color = GoldPrimary)
-                    }
-                }
-            }
-
-            item {
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-
-            // Live Silver Card
-            item {
-                latestRate?.let { rate ->
-                    MetalRateCard(
-                        title = "SILVER (XAG)",
-                        primaryPrice = "${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(rate.silverPrice)} $currency/g",
-                        changePercent = silverChange,
-                        isGold = false,
-                        purityList = listOf(
-                            "1 Gram" to rate.silverPrice,
-                            "1 Tola (11.66g)" to rate.silverPrice * 11.6638,
-                            "1 Kilogram" to rate.silverPrice * 1000
-                        ),
-                        currency = currency
-                    )
-                } ?: run {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(150.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(DarkSurface),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(color = SilverPrimary)
-                    }
-                }
-            }
-
-            item {
-                Spacer(modifier = Modifier.height(12.dp))
-            }
-
-            // Navigation / Action Buttons Grid
-            item {
-                Text(
-                    text = "QUICK TOOLS",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = TextMuted,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        QuickActionButton(
-                            title = "Gold Calculator",
-                            icon = Icons.Filled.Calculate,
-                            color = GoldPrimary,
-                            onClick = { onNavigate("gold_calc") },
-                            modifier = Modifier.weight(1f),
-                            backgroundBrush = Brush.linearGradient(
-                                colors = listOf(
-                                    Color(0xFFFFD573), // Bright Gold
-                                    Color(0xFFE5A93B)  // Rich Gold
-                                )
+                // Live Gold Card
+                item {
+                    latestRate?.let { rate ->
+                        MetalRateCard(
+                            title = "${strings.goldRates} (XAU)",
+                            primaryPrice = "${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(rate.goldPrice24k)} $currency${strings.perGram}",
+                            changePercent = goldChange,
+                            isGold = true,
+                            purityList = listOf(
+                                strings.purity24kDesc to rate.goldPrice24k,
+                                strings.purity22kDesc to rate.goldPrice22k,
+                                strings.purity18kDesc to rate.goldPrice18k,
+                                strings.purity14kDesc to rate.goldPrice14k
                             ),
-                            textColor = Color(0xFF1E1E1E),
-                            borderColor = Color(0xFFE5A93B).copy(alpha = 0.5f)
+                            currency = currency
                         )
-                        QuickActionButton(
-                            title = "Silver Calculator",
-                            icon = Icons.Filled.Calculate,
-                            color = SilverPrimary,
-                            onClick = { onNavigate("silver_calc") },
-                            modifier = Modifier.weight(1f),
-                            backgroundBrush = Brush.linearGradient(
-                                colors = listOf(
-                                    Color(0xFFE2E8F0), // Light Silver
-                                    Color(0xFF94A3B8)  // Medium Silver
-                                )
-                            ),
-                            textColor = Color(0xFF1E1E1E),
-                            borderColor = Color(0xFF94A3B8).copy(alpha = 0.5f)
-                        )
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        QuickActionButton(
-                            title = "Verify Hallmark",
-                            icon = Icons.Filled.CheckCircle,
-                            color = Color(0xFF4CAF50), // Green accent
-                            onClick = { onNavigate("hallmark") },
-                            modifier = Modifier.weight(1f)
-                        )
-                        QuickActionButton(
-                            title = "Price Alerts",
-                            icon = Icons.Filled.Notifications,
-                            color = Color(0xFF2196F3), // Blue accent
-                            onClick = { onNavigate("alerts") },
-                            modifier = Modifier.weight(1f)
-                        )
+                    } ?: run {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(180.dp)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(DarkSurface),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(color = GoldPrimary)
+                        }
                     }
                 }
-            }
 
-            // Premium Paywall Card removed
-            item {
-                Spacer(modifier = Modifier.height(16.dp))
+                item {
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
+                // Live Silver Card
+                item {
+                    latestRate?.let { rate ->
+                        MetalRateCard(
+                            title = "${strings.silverRates} (XAG)",
+                            primaryPrice = "${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(rate.silverPrice)} $currency${strings.perGram}",
+                            changePercent = silverChange,
+                            isGold = false,
+                            purityList = listOf(
+                                "1 ${strings.weightInGrams.split(" ").first()}" to rate.silverPrice,
+                                "1 Tola (11.66g)" to rate.silverPrice * 11.6638,
+                                "1 Kilogram" to rate.silverPrice * 1000
+                            ),
+                            currency = currency
+                        )
+                    } ?: run {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(150.dp)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(DarkSurface),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(color = SilverPrimary)
+                        }
+                    }
+                }
+
+                item {
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+
+                // Navigation / Action Buttons Grid
+                item {
+                    Text(
+                        text = strings.quickCalculator.uppercase(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextMuted,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            QuickActionButton(
+                                title = strings.goldCalculator,
+                                subtitle = strings.calculatePrice,
+                                icon = Icons.Filled.Calculate,
+                                backgroundBrush = Brush.linearGradient(
+                                    colors = listOf(
+                                        Color(0xFFFFD770), // Radiant Gold
+                                        Color(0xFFE5A93B)  // Deep Luxury Gold
+                                    )
+                                ),
+                                borderColor = Color(0xFFF59E0B),
+                                titleColor = Color(0xFF1A1404),
+                                subtitleColor = Color(0xFF6B4702),
+                                iconColor = Color(0xFF1A1404),
+                                onClick = { onNavigate("gold_calc") },
+                                modifier = Modifier.weight(1f),
+                                isLarge = true
+                            )
+                            QuickActionButton(
+                                title = strings.silverCalculator,
+                                subtitle = strings.calculatePrice,
+                                icon = Icons.Filled.Calculate,
+                                backgroundBrush = Brush.linearGradient(
+                                    colors = listOf(
+                                        Color(0xFFF1F5F9), // Radiant Silver White
+                                        Color(0xFFCBD5E1)  // Smooth Platinum Silver
+                                    )
+                                ),
+                                borderColor = Color(0xFF94A3B8),
+                                titleColor = Color(0xFF0F172A),
+                                subtitleColor = Color(0xFF475569),
+                                iconColor = Color(0xFF0F172A),
+                                onClick = { onNavigate("silver_calc") },
+                                modifier = Modifier.weight(1f),
+                                isLarge = true
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            QuickActionButton(
+                                title = strings.tabHallmark,
+                                subtitle = strings.hallmarkBannerSubtitle,
+                                icon = Icons.Filled.CheckCircle,
+                                backgroundBrush = Brush.linearGradient(
+                                    colors = listOf(
+                                        Color(0xFFA7F3D0), // Mint Green
+                                        Color(0xFF34D399)  // Emerald Green
+                                    )
+                                ),
+                                borderColor = Color(0xFF10B981),
+                                titleColor = Color(0xFF064E3B),
+                                subtitleColor = Color(0xFF065F46),
+                                iconColor = Color(0xFF064E3B),
+                                onClick = { onNavigate("hallmark") },
+                                modifier = Modifier.weight(1f),
+                                isLarge = false
+                            )
+                            QuickActionButton(
+                                title = strings.tabAlerts,
+                                subtitle = strings.priceAlertsBannerSubtitle,
+                                icon = Icons.Filled.Notifications,
+                                backgroundBrush = Brush.linearGradient(
+                                    colors = listOf(
+                                        Color(0xFFBAE6FD), // Sky Blue
+                                        Color(0xFF38BDF8)  // Sapphire Blue
+                                    )
+                                ),
+                                borderColor = Color(0xFF0284C7),
+                                titleColor = Color(0xFF0C4A6E),
+                                subtitleColor = Color(0xFF075985),
+                                iconColor = Color(0xFF0C4A6E),
+                                onClick = { onNavigate("alerts") },
+                                modifier = Modifier.weight(1f),
+                                isLarge = false
+                            )
+                        }
+                    }
+                }
+
+                item {
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
             }
-        }
         }
     }
 }
@@ -284,12 +294,13 @@ fun HomeDashboardScreen(
 fun MetalRateCard(
     title: String,
     primaryPrice: String,
-    changePercent: Double,
+    changePercent: Double?,
     isGold: Boolean,
     purityList: List<Pair<String, Double>>,
     currency: String,
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalAppStrings.current
     var isExpanded by remember { mutableStateOf(false) }
 
     val cardBrush = if (isSystemDarkThemeGlobal) {
@@ -355,12 +366,19 @@ fun MetalRateCard(
                         letterSpacing = 1.sp
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = if (currency == "INR") "(Indian Market)" else "(International)",
-                        color = TextSecondary,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Normal
-                    )
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(themeColor.copy(alpha = 0.15f))
+                            .padding(horizontal = 5.dp, vertical = 1.dp)
+                    ) {
+                        Text(
+                            text = strings.spot,
+                            color = themeColor,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
                 PriceChangeIndicator(changePercent = changePercent)
             }
@@ -414,7 +432,7 @@ fun MetalRateCard(
                     horizontalArrangement = Arrangement.Center
                 ) {
                     Text(
-                        text = if (isExpanded) "See less" else "See more",
+                        text = if (isExpanded) "▲" else "▼",
                         color = themeColor,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold
@@ -422,7 +440,7 @@ fun MetalRateCard(
                     Spacer(modifier = Modifier.width(4.dp))
                     Icon(
                         imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                        contentDescription = if (isExpanded) "See less" else "See more",
+                        contentDescription = null,
                         tint = themeColor,
                         modifier = Modifier.size(16.dp)
                     )
@@ -435,78 +453,92 @@ fun MetalRateCard(
 @Composable
 fun QuickActionButton(
     title: String,
+    subtitle: String,
     icon: ImageVector,
-    color: Color,
+    backgroundBrush: Brush,
+    borderColor: Color,
+    titleColor: Color,
+    subtitleColor: Color,
+    iconColor: Color,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    backgroundBrush: Brush? = null,
-    textColor: Color = TextPrimary,
-    borderColor: Color? = null
+    isLarge: Boolean = false
 ) {
-    val cardElevation = if (!isSystemDarkThemeGlobal) 1.5.dp else 0.dp
-    val defaultBorderColor = if (isSystemDarkThemeGlobal) {
-        Color.White.copy(alpha = 0.05f)
-    } else {
-        Color.Black.copy(alpha = 0.06f)
-    }
-    val finalBorderColor = borderColor ?: defaultBorderColor
+    val cardHeight = if (isLarge) 78.dp else 65.dp
+    val iconBadgeSize = if (isLarge) 42.dp else 36.dp
+    val iconSize = if (isLarge) 22.dp else 18.dp
+    val titleSize = if (isLarge) 14.5.sp else 12.5.sp
+    val subtitleSize = if (isLarge) 10.5.sp else 9.5.sp
+    val chevronSize = if (isLarge) 18.dp else 16.dp
 
     Card(
         modifier = modifier
-            .height(64.dp)
+            .height(cardHeight)
             .clip(RoundedCornerShape(16.dp))
             .clickable { onClick() }
-            .border(
-                width = 0.5.dp,
-                color = finalBorderColor,
-                shape = RoundedCornerShape(16.dp)
-            ),
+            .border(BorderStroke(1.5.dp, borderColor), RoundedCornerShape(16.dp)),
         shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = cardElevation),
-        colors = CardDefaults.cardColors(containerColor = if (backgroundBrush != null) Color.Transparent else DarkSurface)
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isLarge) 3.5.dp else 2.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
     ) {
-        val rowModifier = if (backgroundBrush != null) {
-            Modifier
+        Row(
+            modifier = Modifier
                 .fillMaxSize()
                 .background(backgroundBrush)
-                .padding(horizontal = 12.dp)
-        } else {
-            Modifier
-                .fillMaxSize()
-                .padding(horizontal = 12.dp)
-        }
-        Row(
-            modifier = rowModifier,
+                .padding(horizontal = if (isLarge) 12.dp else 10.dp, vertical = if (isLarge) 8.dp else 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Icon Badge
             Box(
                 modifier = Modifier
-                    .size(36.dp)
+                    .size(iconBadgeSize)
                     .clip(CircleShape)
-                    .background(
-                        if (backgroundBrush != null) {
-                            Color.Black.copy(alpha = 0.12f)
-                        } else {
-                            color.copy(alpha = if (isSystemDarkThemeGlobal) 0.15f else 0.1f)
-                        }
+                    .background(Color.Black.copy(alpha = 0.12f))
+                    .border(
+                        width = 1.dp,
+                        color = Color.Black.copy(alpha = 0.14f),
+                        shape = CircleShape
                     ),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = title,
-                    tint = if (backgroundBrush != null) Color(0xFF1E1E1E) else color,
-                    modifier = Modifier.size(20.dp)
+                    tint = iconColor,
+                    modifier = Modifier.size(iconSize)
                 )
             }
-            Spacer(modifier = Modifier.width(10.dp))
-            Text(
-                text = title,
-                color = textColor,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 2,
-                lineHeight = 16.sp
+
+            Spacer(modifier = Modifier.width(if (isLarge) 10.dp else 8.dp))
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = title,
+                    color = titleColor,
+                    fontSize = titleSize,
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(1.dp))
+                Text(
+                    text = subtitle,
+                    color = subtitleColor,
+                    fontSize = subtitleSize,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = subtitleColor.copy(alpha = 0.8f),
+                modifier = Modifier.size(chevronSize)
             )
         }
     }

@@ -20,13 +20,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.goldsilver.livecalc.ui.theme.*
 import com.goldsilver.livecalc.ui.viewmodel.GoldSilverViewModel
+import com.goldsilver.livecalc.util.LocalAppStrings
+import com.goldsilver.livecalc.util.getSupportedLanguages
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -37,12 +38,45 @@ fun SettingsScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val strings = LocalAppStrings.current
     val currency by viewModel.currency.collectAsStateWithLifecycle()
     val language by viewModel.language.collectAsStateWithLifecycle()
     val isPremium by viewModel.isPremium.collectAsStateWithLifecycle()
-    val isDarkMode by viewModel.isDarkMode.collectAsStateWithLifecycle()
+    val isNotificationsEnabled by viewModel.isNotificationsEnabled.collectAsStateWithLifecycle()
     val backgroundTheme by viewModel.backgroundTheme.collectAsStateWithLifecycle()
 
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            viewModel.setNotificationsEnabled(true)
+            android.widget.Toast.makeText(context, "✅ ${strings.alertsEnabledDesc}", android.widget.Toast.LENGTH_SHORT).show()
+        } else {
+            viewModel.setNotificationsEnabled(false)
+            android.widget.Toast.makeText(context, strings.alertsDisabledDesc, android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val onToggleNotification: (Boolean) -> Unit = { checked ->
+        if (checked) {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                val hasPermission = androidx.core.content.ContextCompat.checkSelfPermission(
+                    context,
+                    android.Manifest.permission.POST_NOTIFICATIONS
+                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+                if (hasPermission) {
+                    viewModel.setNotificationsEnabled(true)
+                } else {
+                    permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                }
+            } else {
+                viewModel.setNotificationsEnabled(true)
+            }
+        } else {
+            viewModel.setNotificationsEnabled(false)
+        }
+    }
 
     var currencyExpanded by remember { mutableStateOf(false) }
     var languageExpanded by remember { mutableStateOf(false) }
@@ -51,10 +85,10 @@ fun SettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Settings", color = GoldPrimary, fontWeight = FontWeight.Bold) },
+                title = { Text(strings.settingsTitle, color = GoldPrimary, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = GoldPrimary)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = strings.back, tint = GoldPrimary)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBackground)
@@ -70,12 +104,10 @@ fun SettingsScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Premium Subscription Card removed
-
             // General Settings Card
             item {
                 Text(
-                    text = "PREFERENCES",
+                    text = strings.preferencesAndAlerts,
                     style = MaterialTheme.typography.labelSmall,
                     color = TextMuted,
                     fontWeight = FontWeight.Bold
@@ -95,6 +127,56 @@ fun SettingsScreen(
                     colors = CardDefaults.cardColors(containerColor = DarkSurface)
                 ) {
                     Column(modifier = Modifier.padding(8.dp)) {
+                        // Price Alert Notifications Row
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onToggleNotification(!isNotificationsEnabled) }
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Default.Notifications, contentDescription = "Notifications", tint = SilverPrimary)
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text(strings.priceAlertNotifications, color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                    Text(
+                                        text = if (isNotificationsEnabled) strings.alertsEnabledDesc else strings.alertsDisabledDesc,
+                                        color = TextMuted,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            }
+                            Switch(
+                                checked = isNotificationsEnabled,
+                                onCheckedChange = { onToggleNotification(it) },
+                                thumbContent = if (isNotificationsEnabled) {
+                                    {
+                                        Icon(
+                                            imageVector = Icons.Filled.Check,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(SwitchDefaults.IconSize),
+                                            tint = DarkBackground
+                                        )
+                                    }
+                                } else null,
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = GoldPrimary,
+                                    checkedTrackColor = GoldPrimary.copy(alpha = 0.3f),
+                                    checkedBorderColor = GoldPrimary,
+                                    uncheckedThumbColor = TextMuted,
+                                    uncheckedTrackColor = DarkSurfaceElevated,
+                                    uncheckedBorderColor = TextMuted.copy(alpha = 0.5f)
+                                )
+                            )
+                        }
+
+                        HorizontalDivider(color = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.08f))
+
                         // Currency Selector Row
                         Row(
                             modifier = Modifier
@@ -107,7 +189,7 @@ fun SettingsScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.MonetizationOn, contentDescription = "Currency", tint = SilverPrimary)
                                 Spacer(modifier = Modifier.width(12.dp))
-                                Text("Display Currency", color = TextPrimary)
+                                Text(strings.displayCurrency, color = TextPrimary)
                             }
                             Box {
                                 Text(currency, color = GoldPrimary, fontWeight = FontWeight.Bold)
@@ -115,7 +197,7 @@ fun SettingsScreen(
                                     expanded = currencyExpanded,
                                     onDismissRequest = { currencyExpanded = false }
                                 ) {
-                                    listOf("USD", "INR", "EUR", "AED").forEach { curr ->
+                                    listOf("INR", "USD", "EUR", "AED", "GBP").forEach { curr ->
                                         DropdownMenuItem(
                                             text = { Text(curr) },
                                             onClick = {
@@ -128,9 +210,9 @@ fun SettingsScreen(
                             }
                         }
 
-                        
+                        HorizontalDivider(color = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.08f))
 
-                        // Language Selector Row
+                        // Language Selector Row (7 Languages Supported)
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -142,19 +224,31 @@ fun SettingsScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.Language, contentDescription = "Language", tint = SilverPrimary)
                                 Spacer(modifier = Modifier.width(12.dp))
-                                Text("App Language", color = TextPrimary)
+                                Text(strings.appLanguage, color = TextPrimary)
                             }
                             Box {
-                                Text(language, color = GoldPrimary, fontWeight = FontWeight.Bold)
+                                val currentDisplayName = getSupportedLanguages().firstOrNull { it.first.equals(language, ignoreCase = true) }?.second ?: language
+                                Text(currentDisplayName, color = GoldPrimary, fontWeight = FontWeight.Bold)
                                 DropdownMenu(
                                     expanded = languageExpanded,
                                     onDismissRequest = { languageExpanded = false }
                                 ) {
-                                    listOf("English", "Hindi", "Spanish").forEach { lang ->
+                                    getSupportedLanguages().forEach { (code, displayName) ->
                                         DropdownMenuItem(
-                                            text = { Text(lang) },
+                                            text = {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween
+                                                ) {
+                                                    Text(displayName, fontWeight = if (language.equals(code, ignoreCase = true)) FontWeight.Bold else FontWeight.Normal)
+                                                    if (code != displayName) {
+                                                        Spacer(modifier = Modifier.width(8.dp))
+                                                        Text("($code)", color = TextMuted, fontSize = 12.sp)
+                                                    }
+                                                }
+                                            },
                                             onClick = {
-                                                viewModel.setLanguage(lang)
+                                                viewModel.setLanguage(code)
                                                 languageExpanded = false
                                             }
                                         )
@@ -162,7 +256,6 @@ fun SettingsScreen(
                                 }
                             }
                         }
-
 
                         HorizontalDivider(color = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.08f))
 
@@ -179,7 +272,7 @@ fun SettingsScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.Palette, contentDescription = "Theme", tint = SilverPrimary)
                                 Spacer(modifier = Modifier.width(12.dp))
-                                Text("Background Theme", color = TextPrimary)
+                                Text(strings.backgroundTheme, color = TextPrimary)
                             }
                             Box {
                                 Text(backgroundTheme, color = GoldPrimary, fontWeight = FontWeight.Bold)
@@ -202,10 +295,11 @@ fun SettingsScreen(
                     }
                 }
             }
+
             // Support Card
             item {
                 Text(
-                    text = "SUPPORT & FEEDBACK",
+                    text = strings.aboutAndSupport,
                     style = MaterialTheme.typography.labelSmall,
                     color = TextMuted,
                     fontWeight = FontWeight.Bold
@@ -251,7 +345,7 @@ fun SettingsScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.Star, contentDescription = "Rate Us", tint = GoldPrimary)
                                 Spacer(modifier = Modifier.width(12.dp))
-                                Text("Rate Us", color = TextPrimary)
+                                Text(strings.rateApp, color = TextPrimary)
                             }
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
@@ -282,7 +376,36 @@ fun SettingsScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.Share, contentDescription = "Share us", tint = SilverPrimary)
                                 Spacer(modifier = Modifier.width(12.dp))
-                                Text("Share App", color = TextPrimary)
+                                Text(strings.shareApp, color = TextPrimary)
+                            }
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                contentDescription = null,
+                                tint = TextMuted,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        HorizontalDivider(color = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.08f))
+
+                        // Check for Updates Row
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.checkForAppUpdate(silent = false, context = context)
+                                }
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.SystemUpdate, contentDescription = "Check for Updates", tint = GoldPrimary)
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text(strings.updateAvailable, color = TextPrimary)
+                                    Text("${strings.appVersion} ${com.goldsilver.livecalc.BuildConfig.VERSION_NAME}", color = TextMuted, fontSize = 12.sp)
+                                }
                             }
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,

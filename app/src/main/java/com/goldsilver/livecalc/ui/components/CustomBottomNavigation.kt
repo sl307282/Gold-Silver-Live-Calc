@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -25,23 +24,16 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.goldsilver.livecalc.ui.theme.DarkSurface
-import com.goldsilver.livecalc.ui.theme.DarkSurfaceElevated
 import com.goldsilver.livecalc.ui.theme.GoldPrimary
-import com.goldsilver.livecalc.ui.theme.TextMuted
-import com.goldsilver.livecalc.ui.theme.TextPrimary
 import com.goldsilver.livecalc.ui.theme.isSystemDarkThemeGlobal
+import com.goldsilver.livecalc.util.LocalAppStrings
 import androidx.compose.material3.HorizontalDivider
 
-sealed class NavigationItem(
+data class NavItem(
     val route: String,
     val title: String,
     val icon: ImageVector
-) {
-    object Dashboard : NavigationItem("dashboard", "Rates", Icons.Default.Home)
-    object Charts : NavigationItem("charts", "Trends", Icons.AutoMirrored.Filled.TrendingUp)
-    object Hallmark : NavigationItem("hallmark", "Hallmark", Icons.Default.CheckCircle)
-    object Settings : NavigationItem("settings", "Settings", Icons.Default.Settings)
-}
+)
 
 @Composable
 fun CustomBottomNavigation(
@@ -49,11 +41,13 @@ fun CustomBottomNavigation(
     onNavigate: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalAppStrings.current
+
     val items = listOf(
-        NavigationItem.Dashboard,
-        NavigationItem.Charts,
-        NavigationItem.Hallmark,
-        NavigationItem.Settings
+        NavItem("dashboard", strings.tabRates, Icons.Default.Home),
+        NavItem("charts", strings.tabTrends, Icons.AutoMirrored.Filled.TrendingUp),
+        NavItem("hallmark", strings.tabHallmark, Icons.Default.CheckCircle),
+        NavItem("settings", strings.tabSettings, Icons.Default.Settings)
     )
 
     Column(modifier = modifier) {
@@ -73,8 +67,9 @@ fun CustomBottomNavigation(
             items.forEach { item ->
                 val isSelected = currentRoute == item.route
                 val scale by animateFloatAsState(targetValue = if (isSelected) 1.15f else 1.0f, label = "scale")
+                val selectedColor = if (item.route == "hallmark") Color(0xFF10B981) else GoldPrimary
                 val tintColor by animateColorAsState(
-                    targetValue = if (isSelected) GoldPrimary else (if (isSystemDarkThemeGlobal) Color(0xFF8E8E93) else Color(0xFF757575)), 
+                    targetValue = if (isSelected) selectedColor else (if (isSystemDarkThemeGlobal) Color(0xFF8E8E93) else Color(0xFF757575)), 
                     label = "color"
                 )
 
@@ -112,4 +107,3 @@ fun CustomBottomNavigation(
         }
     }
 }
-

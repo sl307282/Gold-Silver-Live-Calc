@@ -8,7 +8,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.sp
 import com.goldsilver.livecalc.ui.components.HistoryLineChart
 import com.goldsilver.livecalc.ui.theme.*
 import com.goldsilver.livecalc.ui.viewmodel.GoldSilverViewModel
+import com.goldsilver.livecalc.util.LocalAppStrings
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -34,26 +35,42 @@ fun ChartsHistoryScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalAppStrings.current
     val historicalRates by viewModel.historicalRates.collectAsStateWithLifecycle()
+    val latestRate by viewModel.latestRate.collectAsStateWithLifecycle()
+    val goldChangePercent by viewModel.goldChangePercent.collectAsStateWithLifecycle()
+    val silverChangePercent by viewModel.silverChangePercent.collectAsStateWithLifecycle()
     val currency by viewModel.currency.collectAsStateWithLifecycle()
     val isPremium by viewModel.isPremium.collectAsStateWithLifecycle()
 
     var isGoldSelected by remember { mutableStateOf(true) }
     var selectedRange by remember { mutableStateOf("7D") } // 7D, 30D, 1Y
 
-    // Filter historical points to ensure one point per calendar day
-    val chartPoints = remember(historicalRates, isGoldSelected, selectedRange) {
+    // Build chart points: one per calendar day (closing = latest record that day),
+    // then pin today's live rate as the final point so the chart always ends at the current price.
+    val chartPoints = remember(historicalRates, latestRate, isGoldSelected, selectedRange) {
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+
+        // Group all historical rows by date, pick the latest record per day (= closing rate)
         val dailyRates = historicalRates
             .groupBy { dateFormat.format(Date(it.timestamp)) }
-            .map { it.value.last() }
+            .map { (_, dayRates) -> dayRates.maxByOrNull { it.timestamp }!! }
             .sortedBy { it.timestamp }
+            .toMutableList()
+
+        // Replace or append today's entry with the live latest rate (most accurate current price)
+        val todayStr = dateFormat.format(Date(System.currentTimeMillis()))
+        latestRate?.let { live ->
+            dailyRates.removeAll { dateFormat.format(Date(it.timestamp)) == todayStr }
+            dailyRates.add(live)
+            dailyRates.sortBy { it.timestamp }
+        }
 
         val mapped = dailyRates.map { rate ->
             val price = if (isGoldSelected) rate.goldPrice24k else rate.silverPrice
             rate.timestamp to price
         }
-        
+
         when (selectedRange) {
             "7D" -> mapped.takeLast(7)
             "30D" -> mapped.takeLast(30)
@@ -61,12 +78,19 @@ fun ChartsHistoryScreen(
         }
     }
 
+    // Auto-sync rates and history when screen opens
+    LaunchedEffect(Unit) {
+        viewModel.refreshRates(force = false)
+    }
+
+    val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Historical Trends", color = GoldPrimary, fontWeight = FontWeight.Bold)
+                        Text(strings.historicalTrends, color = GoldPrimary, fontWeight = FontWeight.Bold)
                         Spacer(modifier = Modifier.width(8.dp))
                         Box(
                             modifier = Modifier
@@ -75,7 +99,7 @@ fun ChartsHistoryScreen(
                                 .padding(horizontal = 6.dp, vertical = 2.dp)
                         ) {
                             Text(
-                                text = "Spot",
+                                text = strings.spot,
                                 color = SilverPrimary,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold
@@ -87,9 +111,28 @@ fun ChartsHistoryScreen(
                     IconButton(onClick = onBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = strings.back,
                             tint = GoldPrimary
                         )
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = { viewModel.refreshRates(force = true) }
+                    ) {
+                        if (isRefreshing) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                color = GoldPrimary,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = strings.refresh,
+                                tint = GoldPrimary
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBackground)
@@ -126,7 +169,7 @@ fun ChartsHistoryScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "Gold Rates",
+                            text = strings.goldRates,
                             color = if (isGoldSelected) DarkBackground else TextPrimary,
                             fontWeight = FontWeight.Bold
                         )
@@ -141,7 +184,7 @@ fun ChartsHistoryScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "Silver Rates",
+                            text = strings.silverRates,
                             color = if (!isGoldSelected) DarkBackground else TextPrimary,
                             fontWeight = FontWeight.Bold
                         )
@@ -151,22 +194,26 @@ fun ChartsHistoryScreen(
 
             // Range Selectors
             item {
+                val rangeOptions = listOf(
+                    "7D" to strings.range7D,
+                    "30D" to strings.range30D,
+                    "1Y" to strings.range1Y
+                )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    listOf("7D", "30D", "1Y").forEach { range ->
-                        val isRangeSelected = selectedRange == range
+                    rangeOptions.forEach { (rangeKey, rangeLabel) ->
+                        val isRangeSelected = selectedRange == rangeKey
                         val activeColor = if (isGoldSelected) GoldPrimary else SilverPrimary
-                        
-                        val isLocked = range == "1Y" && !isPremium
+                        val isLocked = rangeKey == "1Y" && !isPremium
 
                         Card(
                             modifier = Modifier
                                 .weight(1f)
                                 .height(40.dp)
                                 .clip(RoundedCornerShape(10.dp))
-                                .clickable { selectedRange = range }
+                                .clickable { selectedRange = rangeKey }
                                 .border(
                                     width = if (isRangeSelected) 1.dp else 0.dp,
                                     color = if (isRangeSelected) activeColor else Color.Transparent,
@@ -182,7 +229,7 @@ fun ChartsHistoryScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = range,
+                                    text = rangeLabel,
                                     color = if (isRangeSelected) activeColor else TextSecondary,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 13.sp
@@ -191,7 +238,7 @@ fun ChartsHistoryScreen(
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Icon(
                                         imageVector = Icons.Default.Lock,
-                                        contentDescription = "Premium Required",
+                                        contentDescription = strings.premiumFeature,
                                         tint = GoldPrimary,
                                         modifier = Modifier.size(12.dp)
                                     )
@@ -222,7 +269,8 @@ fun ChartsHistoryScreen(
                                 points = chartPoints,
                                 isGold = isGoldSelected,
                                 currency = currency,
-                                modifier = Modifier.fillMaxSize()
+                                modifier = Modifier.fillMaxSize(),
+                                livePrice = if (isGoldSelected) latestRate?.goldPrice24k else latestRate?.silverPrice
                             )
                         }
 
@@ -248,14 +296,14 @@ fun ChartsHistoryScreen(
                                 )
                                 Spacer(modifier = Modifier.height(12.dp))
                                 Text(
-                                    text = "1-Year Trends is a Premium Feature",
+                                    text = strings.premiumFeature,
                                     color = TextPrimary,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 15.sp,
                                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                 )
                                 Text(
-                                    text = "Unlock long-term investment graphs and deeper market analytics.",
+                                    text = strings.unlockTrendsDesc,
                                     color = TextSecondary,
                                     fontSize = 12.sp,
                                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
@@ -265,7 +313,7 @@ fun ChartsHistoryScreen(
                                     onClick = { viewModel.setPremium(true) },
                                     colors = ButtonDefaults.buttonColors(containerColor = GoldPrimary)
                                 ) {
-                                    Text("Upgrade to Premium", color = DarkBackground, fontWeight = FontWeight.Bold)
+                                    Text(strings.upgradeToPremium, color = DarkBackground, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -274,7 +322,8 @@ fun ChartsHistoryScreen(
                             points = chartPoints,
                             isGold = isGoldSelected,
                             currency = currency,
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier.fillMaxSize(),
+                            livePrice = if (isGoldSelected) latestRate?.goldPrice24k else latestRate?.silverPrice
                         )
                     }
                 }
@@ -287,7 +336,8 @@ fun ChartsHistoryScreen(
                     val maxPrice = prices.maxOrNull() ?: 0.0
                     val minPrice = prices.minOrNull() ?: 0.0
                     val avgPrice = prices.average()
-                    val metalName = if (isGoldSelected) "Gold" else "Silver"
+                    val metalName = if (isGoldSelected) strings.metalGold else strings.metalSilver
+                    val changePercent = if (isGoldSelected) goldChangePercent else silverChangePercent
 
                     Card(
                         modifier = Modifier
@@ -306,19 +356,56 @@ fun ChartsHistoryScreen(
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             Text(
-                                text = "$metalName Market Summary ($selectedRange)",
+                                text = "$metalName ${strings.marketSummary} ($selectedRange)",
                                 color = TextPrimary,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 14.sp
                             )
                             HorizontalDivider(color = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.08f))
+
+                            // Today vs Previous Trading Day % Change (Trend)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(strings.todaysChange, color = TextSecondary, fontSize = 13.sp)
+                                if (changePercent != null && !changePercent.isNaN() && !changePercent.isInfinite()) {
+                                    val formatted = String.format(Locale.US, "%.2f", Math.abs(changePercent))
+                                    when {
+                                        changePercent > 0.0 -> Text(
+                                            text = "▲ +$formatted%",
+                                            color = AccentGreen,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 14.sp
+                                        )
+                                        changePercent < 0.0 -> Text(
+                                            text = "▼ $formatted%",
+                                            color = AccentRed,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 14.sp
+                                        )
+                                        else -> Text(
+                                            text = "0.00%",
+                                            color = TextMuted,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 14.sp
+                                        )
+                                    }
+                                } else {
+                                    Text("—", color = TextMuted, fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                                }
+                            }
+
+                            HorizontalDivider(color = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.04f) else Color.Black.copy(alpha = 0.05f))
+
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text("Highest Rate", color = TextSecondary, fontSize = 13.sp)
+                                Text(strings.highestRate, color = TextSecondary, fontSize = 13.sp)
                                 Text(
-                                    text = "${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(maxPrice)} $currency/g",
+                                    text = "${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(maxPrice)} $currency${strings.perGram}",
                                     color = AccentGreen,
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 14.sp
@@ -328,9 +415,9 @@ fun ChartsHistoryScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text("Lowest Rate", color = TextSecondary, fontSize = 13.sp)
+                                Text(strings.lowestRate, color = TextSecondary, fontSize = 13.sp)
                                 Text(
-                                    text = "${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(minPrice)} $currency/g",
+                                    text = "${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(minPrice)} $currency${strings.perGram}",
                                     color = AccentRed,
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 14.sp
@@ -340,9 +427,9 @@ fun ChartsHistoryScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text("Average Price", color = TextSecondary, fontSize = 13.sp)
+                                Text(strings.averagePrice, color = TextSecondary, fontSize = 13.sp)
                                 Text(
-                                    text = "${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(avgPrice)} $currency/g",
+                                    text = "${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(avgPrice)} $currency${strings.perGram}",
                                     color = TextPrimary,
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 14.sp

@@ -1,14 +1,11 @@
-name: Daily Gold & Silver Rates Sync
+name: Gold & Silver API Daily Sync
 
 on:
-  push:
-    branches:
-         - main
   schedule:
-    # Run once daily at 8:15 AM IST (2:45 AM UTC)
-    # The :45 minute is chosen to avoid peak cron hours on GitHub Actions and minimize delays.
-    - cron: '45 2 * * *'
-  workflow_dispatch: # Allows manual trigger from GitHub UI
+    # Strictly ONLY ONE TIME PER DAY at 9:00 AM IST (3:30 AM UTC)
+    # Minimizes API quota consumption to just 1 run per day
+    - cron: '30 3 * * *'
+  workflow_dispatch: # Allows manual trigger from GitHub Actions UI when needed
 
 jobs:
   sync:
@@ -36,5 +33,5 @@ jobs:
           cd firestore-sync
           # Write the service account json content from secret to file
           echo "$FIREBASE_SERVICE_ACCOUNT" > serviceAccountKey.json
-          # Run the Realtime Database sync script
+          # Run the Realtime Database sync script (exactly 1 sync per day)
           node syncRatesRealtime.js

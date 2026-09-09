@@ -7,6 +7,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -20,6 +22,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
@@ -38,9 +41,12 @@ fun GoldCalculatorScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val strings = com.goldsilver.livecalc.util.LocalAppStrings.current
     val latestRate by viewModel.latestRate.collectAsStateWithLifecycle()
     val currency by viewModel.currency.collectAsStateWithLifecycle()
     val focusManager = LocalFocusManager.current
+    val listState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
 
     // Input states
     var weightInput by remember { mutableStateOf("") }
@@ -115,11 +121,11 @@ fun GoldCalculatorScreen(
     if (showGstInfo) {
         AlertDialog(
             onDismissRequest = { showGstInfo = false },
-            title = { Text("About GST", color = GoldPrimary, fontWeight = FontWeight.Bold) },
-            text = { Text("GST (Goods & Services Tax) of 3% is applicable on gold jewelry in India. It is calculated on the total of Gold Value + Making Charges.", color = TextPrimary) },
+            title = { Text(strings.gstTax, color = GoldPrimary, fontWeight = FontWeight.Bold) },
+            text = { Text("GST of 3% is calculated on the total of Gold Value + Making Charges.", color = TextPrimary) },
             confirmButton = {
                 TextButton(onClick = { showGstInfo = false }) {
-                    Text("Got it", color = GoldPrimary, fontWeight = FontWeight.Bold)
+                    Text(strings.done, color = GoldPrimary, fontWeight = FontWeight.Bold)
                 }
             },
             containerColor = DarkSurface
@@ -129,10 +135,10 @@ fun GoldCalculatorScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Gold Calculator", color = GoldPrimary, fontWeight = FontWeight.Bold) },
+                title = { Text(strings.goldCalculator, color = GoldPrimary, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = GoldPrimary)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = strings.back, tint = GoldPrimary)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBackground)
@@ -142,6 +148,7 @@ fun GoldCalculatorScreen(
         modifier = modifier
     ) { innerPadding ->
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
@@ -149,7 +156,98 @@ fun GoldCalculatorScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
 
-            // ── 1. Live Rate Card ──────────────────────────────────────────
+            // ── 1. Purity (Karat) Selector at TOP OF PAGE (Optimum Compact) ──
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                    shape = RoundedCornerShape(12.dp),
+                    elevation = CardDefaults.cardElevation(1.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
+                        Text(
+                            text = "Purity (Karat)",
+                            color = TextSecondary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            listOf("24K", "22K", "18K", "14K").forEach { purity ->
+                                val isSelected = selectedPurity == purity
+                                val bgColor by animateColorAsState(
+                                    targetValue = if (isSelected) {
+                                        GoldPrimary
+                                    } else {
+                                        if (isSystemDarkThemeGlobal) Color(0xFF1C1E2A) else Color(0xFFE5E7EB)
+                                    },
+                                    animationSpec = tween(200),
+                                    label = "purityBg"
+                                )
+                                val textColor by animateColorAsState(
+                                    targetValue = if (isSelected) {
+                                        Color(0xFF0D0E15)
+                                    } else {
+                                        if (isSystemDarkThemeGlobal) Color(0xFF7E8299) else Color(0xFF6B7280)
+                                    },
+                                    animationSpec = tween(200),
+                                    label = "purityText"
+                                )
+                                val borderColor by animateColorAsState(
+                                    targetValue = if (isSelected) {
+                                        GoldPrimary
+                                    } else {
+                                        if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.08f)
+                                    },
+                                    animationSpec = tween(200),
+                                    label = "purityBorder"
+                                )
+
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(36.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(bgColor)
+                                        .border(
+                                            width = if (isSelected) 1.5.dp else 1.dp,
+                                            color = borderColor,
+                                            shape = RoundedCornerShape(8.dp)
+                                        )
+                                        .clickable {
+                                            selectedPurity = purity
+                                            isEditingRate = false
+                                            focusManager.clearFocus()
+                                            customRateInput = com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(
+                                                when (purity) {
+                                                    "24K" -> rate24k
+                                                    "22K" -> rate22k
+                                                    "18K" -> rate18k
+                                                    else -> rate14k
+                                                }
+                                            )
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = purity,
+                                        color = textColor,
+                                        fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.SemiBold,
+                                        fontSize = 13.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ── 2. Live Rate Card (Below Purity) ───────────────────────────
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -214,7 +312,7 @@ fun GoldCalculatorScreen(
                                                 customRateInput = String.format(java.util.Locale.US, "%.2f", currentRatePerGram)
                                             }
                                             .padding(top = 2.dp)
-                                    )
+                                     )
                                 }
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -242,7 +340,7 @@ fun GoldCalculatorScreen(
                 }
             }
 
-            // ── 2. Input Fields ────────────────────────────────────────────
+            // ── 3. Input Fields (Below Live Rate: Weight, Unit, Making Charge, GST) ──
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -252,7 +350,8 @@ fun GoldCalculatorScreen(
                 ) {
                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
 
-                        // Weight + Unit row
+
+                        // ── 2. Weight + Unit row ────────────────────────────
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             OutlinedTextField(
                                 value = weightInput,
@@ -291,41 +390,6 @@ fun GoldCalculatorScreen(
                                         .forEach { (key, label) ->
                                             DropdownMenuItem(text = { Text(label) }, onClick = { selectedUnit = key; unitDropdownExpanded = false })
                                         }
-                                }
-                            }
-                        }
-
-                        // ── 3. Purity Buttons ──────────────────────────────
-                        Column {
-                            Text("Purity (Karat)", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                listOf("24K", "22K", "18K", "14K").forEach { purity ->
-                                    val isSelected = selectedPurity == purity
-                                    val bgColor by animateColorAsState(
-                                        targetValue = if (isSelected) GoldPrimary else (if (isSystemDarkThemeGlobal) Color(0xFF2A2B38) else Color(0xFFE0E0E0)),
-                                        animationSpec = tween(250), label = "purityBg"
-                                    )
-                                    val textColor by animateColorAsState(
-                                        targetValue = if (isSelected) DarkBackground else TextPrimary,
-                                        animationSpec = tween(250), label = "purityText"
-                                    )
-                                    Box(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .height(42.dp)
-                                            .clip(RoundedCornerShape(10.dp))
-                                            .background(bgColor)
-                                            .clickable {
-                                                isEditingRate = false; focusManager.clearFocus()
-                                                customRateInput = com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(
-                                                    when (purity) { "24K" -> rate24k; "22K" -> rate22k; "18K" -> rate18k; else -> rate14k }
-                                                )
-                                            },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(purity, color = textColor, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                    }
                                 }
                             }
                         }
@@ -421,38 +485,93 @@ fun GoldCalculatorScreen(
                         shape = RoundedCornerShape(14.dp)
                     ) {
                         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                            Text("ESTIMATED BREAKDOWN", color = GoldPrimary, fontWeight = FontWeight.Bold, fontSize = 12.sp, letterSpacing = 1.sp)
+                            Text(strings.priceBreakdown.uppercase(), color = GoldPrimary, fontWeight = FontWeight.Bold, fontSize = 12.sp, letterSpacing = 1.sp)
                             HorizontalDivider(color = GoldPrimary.copy(alpha = 0.15f))
 
-                            BreakdownRow(icon = "🪙", label = "Gold Value", value = "${formatIndianStyle(calculatedValues.baseGoldValue)} $currency")
-                            BreakdownRow(icon = "🛠", label = "Making Charges", value = "${formatIndianStyle(calculatedValues.makingCharges)} $currency")
-                            BreakdownRow(icon = "🧾", label = "GST Amount", value = "${formatIndianStyle(calculatedValues.gstAmount)} $currency")
+                            BreakdownRow(icon = "🪙", label = strings.baseMetalPrice, value = "${formatIndianStyle(calculatedValues.baseGoldValue)} $currency")
+                            BreakdownRow(icon = "🛠", label = strings.totalMakingCharges, value = "${formatIndianStyle(calculatedValues.makingCharges)} $currency")
+                            BreakdownRow(icon = "🧾", label = strings.gstAmount, value = "${formatIndianStyle(calculatedValues.gstAmount)} $currency")
                         }
                     }
                 }
 
-                // ── 7. Final Total Highlighted Card ────────────────────────
+                // ── 7. Final Total Highlighted Card (Light Theme) ─────────
                 item {
                     Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = GoldPrimary.copy(alpha = 0.12f)),
-                        shape = RoundedCornerShape(16.dp),
-                        border = CardDefaults.outlinedCardBorder().let { androidx.compose.foundation.BorderStroke(1.5.dp, GoldPrimary.copy(alpha = 0.5f)) }
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(
+                                width = 1.5.dp,
+                                brush = Brush.linearGradient(
+                                    listOf(
+                                        GoldPrimary,
+                                        Color(0xFFFFDF80),
+                                        GoldPrimary
+                                    )
+                                ),
+                                shape = RoundedCornerShape(18.dp)
+                            ),
+                        shape = RoundedCornerShape(18.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                     ) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth().padding(20.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(
+                                    brush = Brush.verticalGradient(
+                                        listOf(
+                                            Color(0xFFFFFDF5),
+                                            Color(0xFFFBF1D5)
+                                        )
+                                    )
+                                )
+                                .padding(vertical = 20.dp, horizontal = 16.dp),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Text("💰 Final Payable", color = TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                            Text(
-                                text = "${formatIndianStyle(calculatedValues.finalTotal)} $currency",
-                                color = GoldPrimary,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 30.sp,
-                                textAlign = TextAlign.Center
-                            )
-                            Text("Including GST", color = TextSecondary, fontSize = 11.sp)
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Surface(
+                                    color = GoldPrimary.copy(alpha = 0.18f),
+                                    shape = RoundedCornerShape(20.dp),
+                                    modifier = Modifier.padding(bottom = 2.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(
+                                            text = "💰",
+                                            fontSize = 13.sp
+                                        )
+                                        Text(
+                                            text = strings.totalPayable.uppercase(),
+                                            color = Color(0xFF7C5200),
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            letterSpacing = 0.8.sp
+                                        )
+                                    }
+                                }
+
+                                Text(
+                                    text = "${formatIndianStyle(calculatedValues.finalTotal)} $currency",
+                                    color = Color(0xFF1E1A11),
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 32.sp,
+                                    textAlign = TextAlign.Center
+                                )
+
+                                Text(
+                                    text = strings.totalPayable,
+                                    color = Color(0xFF7A6B53),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
                         }
                     }
                 }
@@ -472,20 +591,27 @@ fun GoldCalculatorScreen(
                         shape = RoundedCornerShape(14.dp),
                         border = androidx.compose.foundation.BorderStroke(1.dp, GoldPrimary)
                     ) {
-                        Text("Reset", color = GoldPrimary, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        Text(strings.reset, color = GoldPrimary, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     }
                     Button(
-                        onClick = { focusManager.clearFocus(); hasCalculated = true },
+                        onClick = {
+                            focusManager.clearFocus()
+                            hasCalculated = true
+                            coroutineScope.launch {
+                                kotlinx.coroutines.delay(100)
+                                listState.animateScrollToItem(index = listState.layoutInfo.totalItemsCount - 1)
+                            }
+                        },
                         modifier = Modifier.weight(1.6f).height(52.dp),
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = GoldPrimary)
                     ) {
-                        Text("Calculate", color = DarkBackground, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        Text(strings.calculate, color = DarkBackground, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     }
                 }
             }
 
-            item { Spacer(modifier = Modifier.height(16.dp)) }
+            item { Spacer(modifier = Modifier.height(48.dp)) }
         }
     }
 }

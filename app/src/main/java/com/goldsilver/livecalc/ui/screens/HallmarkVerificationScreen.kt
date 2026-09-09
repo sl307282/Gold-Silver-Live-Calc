@@ -11,9 +11,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.*
@@ -29,6 +29,8 @@ import androidx.compose.ui.unit.sp
 import com.goldsilver.livecalc.ui.theme.*
 import com.goldsilver.livecalc.ui.viewmodel.GoldSilverViewModel
 
+private val HallmarkPrimary = Color(0xFF10B981) // Vibrant Emerald Green
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HallmarkVerificationScreen(
@@ -37,6 +39,7 @@ fun HallmarkVerificationScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val strings = com.goldsilver.livecalc.util.LocalAppStrings.current
     var showHuidSheet by remember { mutableStateOf(false) }
 
     // ── Bottom Sheet: What is a HUID? ────────────────────────────────────────
@@ -59,8 +62,8 @@ fun HallmarkVerificationScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "What is a HUID?",
-                        color = GoldPrimary,
+                        text = strings.hallmarkTitle,
+                        color = HallmarkPrimary,
                         fontWeight = FontWeight.Bold,
                         fontSize = 20.sp
                     )
@@ -69,27 +72,27 @@ fun HallmarkVerificationScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
-                            contentDescription = "Close",
-                            tint = GoldPrimary
+                            contentDescription = strings.cancel,
+                            tint = HallmarkPrimary
                         )
                     }
                 }
-                HorizontalDivider(color = GoldPrimary.copy(alpha = 0.2f))
+                HorizontalDivider(color = HallmarkPrimary.copy(alpha = 0.2f))
 
                 HuidInfoRow(
                     icon = Icons.Default.Shield,
-                    title = "Unique 6-Character Code",
-                    body = "HUID (Hallmark Unique Identification) is a 6-character alphanumeric code stamped on every BIS-hallmarked jewellery item."
+                    title = strings.enterHuidCode,
+                    body = strings.hallmarkSubtitle
                 )
                 HuidInfoRow(
                     icon = Icons.Default.Verified,
-                    title = "Guaranteed Authenticity",
-                    body = "Every BIS hallmarked jewellery item carries a unique HUID that links directly to the registered assaying & hallmarking centre."
+                    title = strings.verifiedAuthentic,
+                    body = strings.assayCenter
                 )
                 HuidInfoRow(
                     icon = Icons.Default.Info,
-                    title = "How to Verify",
-                    body = "Use the official BIS verification service to check any HUID. This app opens the official portal so you can verify directly."
+                    title = strings.verifyHuid,
+                    body = strings.hallmarkBannerSubtitle
                 )
             }
         }
@@ -101,8 +104,8 @@ fun HallmarkVerificationScreen(
             TopAppBar(
                 title = {
                     Text(
-                        "BIS Hallmark Verification",
-                        color = GoldPrimary,
+                        strings.hallmarkTitle,
+                        color = HallmarkPrimary,
                         fontWeight = FontWeight.Bold
                     )
                 },
@@ -110,8 +113,8 @@ fun HallmarkVerificationScreen(
                     IconButton(onClick = onBack) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = GoldPrimary
+                            contentDescription = strings.back,
+                            tint = HallmarkPrimary
                         )
                     }
                 },
@@ -135,7 +138,7 @@ fun HallmarkVerificationScreen(
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .border(1.dp, GoldPrimary.copy(alpha = 0.25f), RoundedCornerShape(16.dp)),
+                        .border(1.dp, HallmarkPrimary.copy(alpha = 0.25f), RoundedCornerShape(16.dp)),
                     colors = CardDefaults.cardColors(containerColor = DarkSurface),
                     shape = RoundedCornerShape(16.dp),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -153,13 +156,13 @@ fun HallmarkVerificationScreen(
                                 modifier = Modifier
                                     .size(44.dp)
                                     .clip(RoundedCornerShape(10.dp))
-                                    .background(GoldPrimary.copy(alpha = 0.12f)),
+                                    .background(HallmarkPrimary.copy(alpha = 0.12f)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Verified,
                                     contentDescription = null,
-                                    tint = GoldPrimary,
+                                    tint = HallmarkPrimary,
                                     modifier = Modifier.size(26.dp)
                                 )
                             }
@@ -172,14 +175,14 @@ fun HallmarkVerificationScreen(
                                 )
                                 Text(
                                     text = "Bureau of Indian Standards",
-                                    color = GoldPrimary,
+                                    color = HallmarkPrimary,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.SemiBold
                                 )
                             }
                         }
 
-                        HorizontalDivider(color = GoldPrimary.copy(alpha = 0.12f))
+                        HorizontalDivider(color = HallmarkPrimary.copy(alpha = 0.12f))
 
                         Text(
                             text = "Verify the authenticity of your gold or silver jewellery using the official Bureau of Indian Standards (BIS) verification service.",
@@ -226,14 +229,14 @@ fun HallmarkVerificationScreen(
                     // Primary Button — opens BIS CARE app
                     Button(
                         onClick = { openBisCareApp(context) },
-                        colors = ButtonDefaults.buttonColors(containerColor = GoldPrimary),
+                        colors = ButtonDefaults.buttonColors(containerColor = HallmarkPrimary),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(52.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.OpenInNew,
+                            imageVector = Icons.AutoMirrored.Filled.OpenInNew,
                             contentDescription = null,
                             tint = DarkBackground,
                             modifier = Modifier.size(18.dp)
@@ -258,14 +261,14 @@ fun HallmarkVerificationScreen(
                                 else
                                     Color.Black.copy(alpha = 0.04f)
                             )
-                            .padding(10.dp),
+                                .padding(10.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.Top
                     ) {
                         Icon(
                             imageVector = Icons.Default.Info,
                             contentDescription = null,
-                            tint = GoldPrimary.copy(alpha = 0.7f),
+                            tint = HallmarkPrimary.copy(alpha = 0.7f),
                             modifier = Modifier.size(14.dp).padding(top = 1.dp)
                         )
                         Text(
@@ -281,7 +284,7 @@ fun HallmarkVerificationScreen(
                         onClick = { showHuidSheet = true },
                         border = androidx.compose.foundation.BorderStroke(
                             1.dp,
-                            GoldPrimary.copy(alpha = 0.6f)
+                            HallmarkPrimary.copy(alpha = 0.6f)
                         ),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier
@@ -291,13 +294,13 @@ fun HallmarkVerificationScreen(
                         Icon(
                             imageVector = Icons.Default.Info,
                             contentDescription = null,
-                            tint = GoldPrimary,
+                            tint = HallmarkPrimary,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = "What is a HUID?",
-                            color = GoldPrimary,
+                            color = HallmarkPrimary,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 15.sp
                         )
@@ -325,13 +328,13 @@ private fun HuidInfoRow(
             modifier = Modifier
                 .size(36.dp)
                 .clip(RoundedCornerShape(8.dp))
-                .background(GoldPrimary.copy(alpha = 0.10f)),
+                .background(HallmarkPrimary.copy(alpha = 0.10f)),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = GoldPrimary,
+                tint = HallmarkPrimary,
                 modifier = Modifier.size(20.dp)
             )
         }

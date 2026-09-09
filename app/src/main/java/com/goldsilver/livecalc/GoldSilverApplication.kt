@@ -21,9 +21,9 @@ class GoldSilverApplication : Application() {
             database.verificationDao()
         )
 
-        // Schedule or cancel WorkManager rate updates based on preference
+        // Schedule or cancel WorkManager rate updates based on preference (default = true)
         val sharedPrefs = getSharedPreferences("gold_silver_prefs", MODE_PRIVATE)
-        val isNotificationsEnabled = sharedPrefs.getBoolean("notifications_enabled", false)
+        val isNotificationsEnabled = sharedPrefs.getBoolean("notifications_enabled", true)
         if (isNotificationsEnabled) {
             BootReceiver.scheduleBackgroundWork(this)
         } else {

@@ -12,7 +12,7 @@ class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
             val sharedPrefs = context.getSharedPreferences("gold_silver_prefs", Context.MODE_PRIVATE)
-            val isNotificationsEnabled = sharedPrefs.getBoolean("notifications_enabled", false)
+            val isNotificationsEnabled = sharedPrefs.getBoolean("notifications_enabled", true)
             if (isNotificationsEnabled) {
                 scheduleBackgroundWork(context)
             }

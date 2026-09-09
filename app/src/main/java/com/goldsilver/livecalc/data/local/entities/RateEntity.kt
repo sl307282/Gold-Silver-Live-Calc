@@ -14,5 +14,9 @@ data class RateEntity(
     val goldPrice18k: Double, // Per Gram
     val goldPrice14k: Double, // Per Gram
     val silverPrice: Double,   // Per Gram
-    val currency: String = "USD"
+    val currency: String = "USD",
+    val prevTradingDayGoldPrice: Double? = null,
+    val prevTradingDaySilverPrice: Double? = null,
+    val date: String? = null, // "YYYY-MM-DD"
+    val unit: String? = "gram"
 )

@@ -61,6 +61,14 @@ async function fetchExchangeRates() {
   return FALLBACK_EXCHANGE_RATES;
 }
 
+function getFormattedDate(date) {
+  const d = new Date(date);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 async function syncRates() {
   console.log('Starting gold and silver rate synchronization for Realtime Database (Optimized)...');
 
@@ -73,22 +81,31 @@ async function syncRates() {
     process.exit(1);
   }
 
+  // Validate API rates are strictly positive
+  if (!goldDataUSD.price_gram_24k || goldDataUSD.price_gram_24k <= 0 ||
+      !silverDataUSD.price_gram_24k || silverDataUSD.price_gram_24k <= 0) {
+    console.error('CRITICAL ERROR: Invalid/zero rate received from GoldAPI. Aborting sync.');
+    process.exit(1);
+  }
+
   const exchangeRates = await fetchExchangeRates();
-  const timestamp = Date.now();
+  const now = new Date();
+  const timestamp = now.getTime();
+  const dateStr = getFormattedDate(now);
 
   for (const currency of CURRENCIES) {
-    console.log(`\nProcessing rates for ${currency}...`);
+    console.log(`\nProcessing rates for ${currency} on date ${dateStr}...`);
     const rate = exchangeRates[currency];
-    if (!rate) {
-      console.warn(`No exchange rate found for ${currency}, skipping.`);
+    if (!rate || rate <= 0) {
+      console.warn(`No valid exchange rate found for ${currency}, skipping.`);
       continue;
     }
 
     // Convert prices from USD per gram to target currency
     let goldPrice24k = goldDataUSD.price_gram_24k * rate;
-    let goldPrice22k = goldDataUSD.price_gram_22k * rate;
-    let goldPrice18k = goldDataUSD.price_gram_18k * rate;
-    let goldPrice14k = goldDataUSD.price_gram_14k * rate;
+    let goldPrice22k = (goldDataUSD.price_gram_22k || (goldDataUSD.price_gram_24k * 0.9167)) * rate;
+    let goldPrice18k = (goldDataUSD.price_gram_18k || (goldDataUSD.price_gram_24k * 0.75)) * rate;
+    let goldPrice14k = (goldDataUSD.price_gram_14k || (goldDataUSD.price_gram_24k * 0.5833)) * rate;
     
     let silverPriceUSD = silverDataUSD.price_gram_24k || (silverDataUSD.price / 31.1035);
     let silverPrice = silverPriceUSD * rate;
@@ -105,20 +122,74 @@ async function syncRates() {
       silverPrice *= silverAdjustmentFactor;
     }
 
-    const documentData = {
+    // Ensure valid non-zero values
+    if (isNaN(goldPrice24k) || goldPrice24k <= 0 || isNaN(silverPrice) || silverPrice <= 0) {
+      console.warn(`Invalid computed rate for ${currency}, skipping.`);
+      continue;
+    }
+
+    const rateRecord = {
+      date: dateStr,
       currency: currency,
+      unit: 'gram',
       timestamp: timestamp,
-      goldPrice24k: Number(goldPrice24k),
-      goldPrice22k: Number(goldPrice22k),
-      goldPrice18k: Number(goldPrice18k),
-      goldPrice14k: Number(goldPrice14k),
-      silverPrice: Number(silverPrice)
+      apiFetchedTimestamp: goldDataUSD.timestamp ? Number(goldDataUSD.timestamp) * 1000 : timestamp,
+      firebaseSavedTimestamp: timestamp,
+      goldPrice24k: Number(goldPrice24k.toFixed(2)),
+      goldPrice22k: Number(goldPrice22k.toFixed(2)),
+      goldPrice18k: Number(goldPrice18k.toFixed(2)),
+      goldPrice14k: Number(goldPrice14k.toFixed(2)),
+      silverPrice: Number(silverPrice.toFixed(2))
     };
 
     try {
-      // Save directly to Realtime Database ref: /rates/CURRENCY
-      await db.ref('rates/' + currency).set(documentData);
-      console.log(`Successfully updated Realtime DB ref 'rates/${currency}':`, documentData);
+      // Look up immediately preceding saved trading day from history to compute daily fluctuation
+      let prevTradingDayGoldPrice = null;
+      let prevTradingDaySilverPrice = null;
+
+      const historySnapshot = await db.ref(`history/${currency}`).once('value');
+      if (historySnapshot.exists()) {
+        const historyData = historySnapshot.val();
+        const pastDates = Object.keys(historyData).filter(d => d < dateStr).sort();
+        if (pastDates.length > 0) {
+          const lastDate = pastDates[pastDates.length - 1];
+          const lastRecord = historyData[lastDate];
+          if (lastRecord && lastRecord.goldPrice24k > 0 && lastRecord.silverPrice > 0) {
+            prevTradingDayGoldPrice = lastRecord.goldPrice24k;
+            prevTradingDaySilverPrice = lastRecord.silverPrice;
+          }
+        }
+      }
+
+      if (prevTradingDayGoldPrice !== null) rateRecord.prevTradingDayGoldPrice = prevTradingDayGoldPrice;
+      if (prevTradingDaySilverPrice !== null) rateRecord.prevTradingDaySilverPrice = prevTradingDaySilverPrice;
+
+      // 1. Update Latest Live Snapshot: /rates/CURRENCY
+      await db.ref('rates/' + currency).set(rateRecord);
+      console.log(`Successfully updated Realtime DB ref 'rates/${currency}':`, rateRecord);
+
+      // 2. Update/Save Daily Historical Record: /history/CURRENCY/YYYY-MM-DD
+      // (Overwrites existing record on same date, guaranteeing one record per day)
+      await db.ref(`history/${currency}/${dateStr}`).set(rateRecord);
+      console.log(`Successfully updated Realtime DB history ref 'history/${currency}/${dateStr}'`);
+
+      // 3. Rolling 1-Year Window: Purge records older than 365 days
+      const oneYearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+      const cutoffDateStr = getFormattedDate(oneYearAgo);
+
+      if (historySnapshot.exists()) {
+        const historyData = historySnapshot.val();
+        let purgedCount = 0;
+        for (const recordDate of Object.keys(historyData)) {
+          if (recordDate < cutoffDateStr) {
+            await db.ref(`history/${currency}/${recordDate}`).remove();
+            purgedCount++;
+          }
+        }
+        if (purgedCount > 0) {
+          console.log(`[Rolling 1-Year] Purged ${purgedCount} expired records (< ${cutoffDateStr}) for ${currency}`);
+        }
+      }
     } catch (dbError) {
       console.error(`Failed to save ${currency} to Realtime DB:`, dbError.message);
     }

@@ -15,6 +15,8 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.ui.platform.LocalContext
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -35,6 +37,8 @@ import java.text.SimpleDateFormat
 import java.util.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
+private val AlertsPrimary = Color(0xFF38BDF8) // Vibrant Sapphire / Sky Blue
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PriceAlertsScreen(
@@ -42,83 +46,12 @@ fun PriceAlertsScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val strings = com.goldsilver.livecalc.util.LocalAppStrings.current
     val alerts by viewModel.alerts.collectAsStateWithLifecycle()
     val currency by viewModel.currency.collectAsStateWithLifecycle()
     val isPremium by viewModel.isPremium.collectAsStateWithLifecycle()
     val latestRate by viewModel.latestRate.collectAsStateWithLifecycle()
-    val isNotificationsEnabled by viewModel.isNotificationsEnabled.collectAsStateWithLifecycle()
     val context = LocalContext.current
-
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
-            viewModel.setNotificationsEnabled(true)
-            try {
-                com.google.firebase.messaging.FirebaseMessaging.getInstance().subscribeToTopic("rate_alerts")
-            } catch (e: java.lang.Exception) {
-                e.printStackTrace()
-            }
-            android.widget.Toast.makeText(
-                context,
-                "✅ Gold & Silver price alerts enabled.\nMonitoring rates in the background and notifying you when your target alerts are met.",
-                android.widget.Toast.LENGTH_LONG
-            ).show()
-        } else {
-            viewModel.setNotificationsEnabled(false)
-            android.widget.Toast.makeText(
-                context,
-                "Notification permission is required to enable alerts.",
-                android.widget.Toast.LENGTH_SHORT
-            ).show()
-        }
-    }
-
-    val onToggleNotification: (Boolean) -> Unit = { checked ->
-        if (checked) {
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                val hasPermission = androidx.core.content.ContextCompat.checkSelfPermission(
-                    context,
-                    android.Manifest.permission.POST_NOTIFICATIONS
-                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-                
-                if (hasPermission) {
-                    viewModel.setNotificationsEnabled(true)
-                    try {
-                        com.google.firebase.messaging.FirebaseMessaging.getInstance().subscribeToTopic("rate_alerts")
-                    } catch (e: java.lang.Exception) {
-                        e.printStackTrace()
-                    }
-                    android.widget.Toast.makeText(
-                        context,
-                        "✅ Gold & Silver price alerts enabled.\nMonitoring rates in the background and notifying you when your target alerts are met.",
-                        android.widget.Toast.LENGTH_LONG
-                    ).show()
-                } else {
-                    permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-                }
-            } else {
-                viewModel.setNotificationsEnabled(true)
-                try {
-                    com.google.firebase.messaging.FirebaseMessaging.getInstance().subscribeToTopic("rate_alerts")
-                } catch (e: java.lang.Exception) {
-                    e.printStackTrace()
-                }
-                android.widget.Toast.makeText(
-                    context,
-                    "✅ Gold & Silver price alerts enabled.\nMonitoring rates in the background and notifying you when your target alerts are met.",
-                    android.widget.Toast.LENGTH_LONG
-                ).show()
-            }
-        } else {
-            viewModel.setNotificationsEnabled(false)
-            try {
-                com.google.firebase.messaging.FirebaseMessaging.getInstance().unsubscribeFromTopic("rate_alerts")
-            } catch (e: java.lang.Exception) {
-                e.printStackTrace()
-            }
-        }
-    }
 
     val currentGoldPrice = latestRate?.goldPrice24k ?: 76.20
     val currentSilverPrice = latestRate?.silverPrice ?: 0.96
@@ -126,19 +59,28 @@ fun PriceAlertsScreen(
     // Form states
     var isGold by remember { mutableStateOf(true) }
     var targetPriceInput by remember { mutableStateOf("") }
-    var isAboveCondition by remember { mutableStateOf(true) } // true: ABOVE, false: BELOW
+    var isAboveCondition by remember { mutableStateOf(false) } // Default: Goes Below (false: BELOW, true: ABOVE)
 
     val activeAlerts = remember(alerts) { alerts.filter { it.isActive } }
 
     var showLimitDialog by remember { mutableStateOf(false) }
+    var alertDialogData by remember { mutableStateOf<AlertDialogData?>(null) }
+
+    // Auto-disappear popup after 2 seconds
+    LaunchedEffect(alertDialogData) {
+        if (alertDialogData != null) {
+            kotlinx.coroutines.delay(2000L)
+            alertDialogData = null
+        }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Smart Price Alerts", color = GoldPrimary, fontWeight = FontWeight.Bold) },
+                title = { Text(strings.priceAlertsTitle, color = AlertsPrimary, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = GoldPrimary)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = strings.back, tint = AlertsPrimary)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBackground)
@@ -207,65 +149,161 @@ fun PriceAlertsScreen(
 
                         // Metal select
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(36.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(Color.White.copy(alpha = 0.05f))
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
+                            val isDark = isSystemDarkThemeGlobal
+                            // Gold button
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .fillMaxHeight()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(if (isGold) GoldPrimary else Color.Transparent)
+                                    .height(48.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(
+                                        if (isGold) GoldPrimary 
+                                        else (if (isDark) DarkSurfaceElevated else Color(0xFFF1F5F9))
+                                    )
+                                    .border(
+                                        width = if (isGold) 2.dp else 1.dp,
+                                        color = if (isGold) GoldPrimary 
+                                                else (if (isDark) Color.White.copy(alpha = 0.20f) else Color.Black.copy(alpha = 0.15f)),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
                                     .clickable { isGold = true },
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text("Gold", color = if (isGold) DarkBackground else TextPrimary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Text(
+                                        text = "🪙",
+                                        fontSize = 16.sp
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Gold",
+                                        color = if (isGold) DarkBackground else (if (isDark) Color.White else Color(0xFF1E293B)),
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp
+                                    )
+                                }
                             }
+                            // Silver button
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .fillMaxHeight()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(if (!isGold) SilverPrimary else Color.Transparent)
+                                    .height(48.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(
+                                        if (!isGold) SilverPrimary 
+                                        else (if (isDark) DarkSurfaceElevated else Color(0xFFF1F5F9))
+                                    )
+                                    .border(
+                                        width = if (!isGold) 2.dp else 1.dp,
+                                        color = if (!isGold) SilverPrimary 
+                                                else (if (isDark) Color.White.copy(alpha = 0.20f) else Color.Black.copy(alpha = 0.15f)),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
                                     .clickable { isGold = false },
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text("Silver", color = if (!isGold) DarkBackground else TextPrimary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Text(
+                                        text = "🥈",
+                                        fontSize = 16.sp
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Silver",
+                                        color = if (!isGold) DarkBackground else (if (isDark) Color.White else Color(0xFF1E293B)),
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp
+                                    )
+                                }
                             }
                         }
 
-                        // Trigger Condition select
+                        // Trigger Condition select (Left: Goes Below, Right: Goes Above)
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(36.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(Color.White.copy(alpha = 0.05f))
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
+                            val isDark = isSystemDarkThemeGlobal
+                            // Goes Below button (Left Side)
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .fillMaxHeight()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(if (isAboveCondition) GoldPrimary else Color.Transparent)
-                                    .clickable { isAboveCondition = true },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text("Goes Above (≥)", color = if (isAboveCondition) DarkBackground else TextPrimary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxHeight()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(if (!isAboveCondition) GoldPrimary else Color.Transparent)
+                                    .height(48.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(
+                                        if (!isAboveCondition) AlertsPrimary 
+                                        else (if (isDark) DarkSurfaceElevated else Color(0xFFF1F5F9))
+                                    )
+                                    .border(
+                                        width = if (!isAboveCondition) 2.dp else 1.dp,
+                                        color = if (!isAboveCondition) AlertsPrimary 
+                                                else (if (isDark) Color.White.copy(alpha = 0.20f) else Color.Black.copy(alpha = 0.15f)),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
                                     .clickable { isAboveCondition = false },
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text("Goes Below (≤)", color = if (!isAboveCondition) DarkBackground else TextPrimary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Text(
+                                        text = "📉",
+                                        fontSize = 15.sp
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Goes Below (≤)",
+                                        color = if (!isAboveCondition) Color(0xFF0F172A) else (if (isDark) Color.White else Color(0xFF1E293B)),
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.5.sp
+                                    )
+                                }
+                            }
+                            // Goes Above button (Right Side)
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(
+                                        if (isAboveCondition) AlertsPrimary 
+                                        else (if (isDark) DarkSurfaceElevated else Color(0xFFF1F5F9))
+                                    )
+                                    .border(
+                                        width = if (isAboveCondition) 2.dp else 1.dp,
+                                        color = if (isAboveCondition) AlertsPrimary 
+                                                else (if (isDark) Color.White.copy(alpha = 0.20f) else Color.Black.copy(alpha = 0.15f)),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    .clickable { isAboveCondition = true },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Text(
+                                        text = "📈",
+                                        fontSize = 15.sp
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Goes Above (≥)",
+                                        color = if (isAboveCondition) Color(0xFF0F172A) else (if (isDark) Color.White else Color(0xFF1E293B)),
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.5.sp
+                                    )
+                                }
                             }
                         }
 
@@ -276,8 +314,8 @@ fun PriceAlertsScreen(
                             label = { Text("Target Price ($currency/Gram)") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = GoldPrimary,
-                                focusedLabelColor = GoldPrimary,
+                                focusedBorderColor = AlertsPrimary,
+                                focusedLabelColor = AlertsPrimary,
                                 unfocusedBorderColor = Color.Gray,
                                 focusedTextColor = TextPrimary,
                                 unfocusedTextColor = TextPrimary
@@ -291,20 +329,52 @@ fun PriceAlertsScreen(
                             onClick = {
                                 val price = com.goldsilver.livecalc.util.IndianCurrencyFormatter.parseAmount(targetPriceInput)
                                 if (price > 0) {
-                                    // Verify monetization limits: max 1 alert for free tier
-                                    if (!isPremium && activeAlerts.size >= 1) {
+                                    val selectedMetal = if (isGold) "GOLD" else "SILVER"
+                                    val metalLabel = if (isGold) "Gold" else "Silver"
+                                    val selectedCondition = if (isAboveCondition) "ABOVE" else "BELOW"
+                                    val formattedPrice = "${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(price)} $currency"
+
+                                    // Check if duplicate alert exists for same metal & target price
+                                    val isDuplicate = activeAlerts.any { alert ->
+                                        alert.metal.equals(selectedMetal, ignoreCase = true) &&
+                                        Math.abs(alert.targetPrice - price) < 0.001
+                                    }
+
+                                    if (isDuplicate) {
+                                        // Show Duplicate Alert Popup
+                                        val duplicateMsg = "Target price already set"
+                                        android.widget.Toast.makeText(context, "⚠️ $duplicateMsg", android.widget.Toast.LENGTH_LONG).show()
+                                        alertDialogData = AlertDialogData(
+                                            title = "Target Price Already Set",
+                                            message = "Target price already set. A price alert for $metalLabel at $formattedPrice/g is already set and active.",
+                                            isSuccess = false
+                                        )
+                                    } else if (!isPremium && activeAlerts.size >= 1) {
+                                        // Verify monetization limits: max 1 alert for free tier
                                         showLimitDialog = true
                                     } else {
+                                        // Save new Alert
                                         viewModel.addAlert(
-                                            metal = if (isGold) "GOLD" else "SILVER",
+                                            metal = selectedMetal,
                                             targetPrice = price,
-                                            condition = if (isAboveCondition) "ABOVE" else "BELOW"
+                                            condition = selectedCondition
                                         )
                                         targetPriceInput = ""
+
+                                        // Show Success Popup
+                                        val successMsg = "Target price $formattedPrice set successfully"
+                                        android.widget.Toast.makeText(context, "✅ $successMsg", android.widget.Toast.LENGTH_LONG).show()
+                                        alertDialogData = AlertDialogData(
+                                            title = "Target Price Set Successfully",
+                                            message = "Target price $formattedPrice/g set successfully for $metalLabel.",
+                                            isSuccess = true
+                                        )
                                     }
+                                } else {
+                                    android.widget.Toast.makeText(context, "Please enter a valid target price", android.widget.Toast.LENGTH_SHORT).show()
                                 }
                             },
-                            colors = ButtonDefaults.buttonColors(containerColor = GoldPrimary),
+                            colors = ButtonDefaults.buttonColors(containerColor = AlertsPrimary),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text("Set Alert", color = DarkBackground, fontWeight = FontWeight.Bold)
@@ -313,70 +383,7 @@ fun PriceAlertsScreen(
                 }
             }
 
-            // Notification Toggle Card
-            item {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .border(
-                            width = 0.5.dp,
-                            color = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.08f),
-                            shape = RoundedCornerShape(16.dp)
-                        ),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = DarkSurface)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onToggleNotification(!isNotificationsEnabled) },
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Notifications, contentDescription = "Notifications", tint = SilverPrimary)
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Text("Gold & Silver Price Alerts", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                            }
-                            Switch(
-                                checked = isNotificationsEnabled,
-                                onCheckedChange = { onToggleNotification(it) },
-                                thumbContent = if (isNotificationsEnabled) {
-                                    {
-                                        Icon(
-                                            imageVector = Icons.Filled.Check,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(SwitchDefaults.IconSize),
-                                            tint = DarkBackground
-                                        )
-                                    }
-                                } else null,
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = GoldPrimary,
-                                    checkedTrackColor = GoldPrimary.copy(alpha = 0.3f),
-                                    checkedBorderColor = GoldPrimary,
-                                    uncheckedThumbColor = TextMuted,
-                                    uncheckedTrackColor = DarkSurfaceElevated,
-                                    uncheckedBorderColor = TextMuted.copy(alpha = 0.5f)
-                                )
-                            )
-                        }
-                        if (isNotificationsEnabled) {
-                            Text(
-                                text = "✅ Gold & Silver price alerts enabled.\nMonitoring rates in the background and notifying you when your target alerts are met.",
-                                color = TextMuted,
-                                fontSize = 12.sp,
-                                modifier = Modifier.padding(top = 4.dp)
-                            )
-                        }
-                    }
-                }
-            }
+
 
             // Active Alerts Section
             item {
@@ -419,7 +426,7 @@ fun PriceAlertsScreen(
             onDismissRequest = { showLimitDialog = false },
             title = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Lock, contentDescription = "Lock", tint = GoldPrimary)
+                    Icon(Icons.Default.Lock, contentDescription = "Lock", tint = AlertsPrimary)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Multiple Alerts Limit")
                 }
@@ -433,7 +440,7 @@ fun PriceAlertsScreen(
                         viewModel.setPremium(true)
                         showLimitDialog = false
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = GoldPrimary)
+                    colors = ButtonDefaults.buttonColors(containerColor = AlertsPrimary)
                 ) {
                     Text("Unlock Premium", color = DarkBackground)
                 }
@@ -445,7 +452,55 @@ fun PriceAlertsScreen(
             }
         )
     }
+
+    // Success or Duplicate Popup Dialog
+    alertDialogData?.let { data ->
+        AlertDialog(
+            onDismissRequest = { alertDialogData = null },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = if (data.isSuccess) Icons.Default.CheckCircle else Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = if (data.isSuccess) Color(0xFF10B981) else Color(0xFFF59E0B)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = data.title,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary,
+                        fontSize = 17.sp
+                    )
+                }
+            },
+            text = {
+                Text(
+                    text = data.message,
+                    color = TextSecondary,
+                    fontSize = 14.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = { alertDialogData = null },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (data.isSuccess) Color(0xFF10B981) else AlertsPrimary
+                    )
+                ) {
+                    Text("OK", color = DarkBackground, fontWeight = FontWeight.Bold)
+                }
+            },
+            containerColor = DarkSurface,
+            tonalElevation = 8.dp
+        )
+    }
 }
+
+private data class AlertDialogData(
+    val title: String,
+    val message: String,
+    val isSuccess: Boolean
+)
 
 @Composable
 fun AlertItem(
@@ -473,33 +528,34 @@ fun AlertItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(14.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Icon(
                     imageVector = Icons.Default.NotificationsActive,
                     contentDescription = "Alert",
                     tint = if (alert.isActive) metalColor else TextMuted,
                     modifier = Modifier.size(24.dp)
                 )
-                Spacer(modifier = Modifier.width(16.dp))
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "$metalName $conditionSymbol ${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(alert.targetPrice)} $currency",
-                            color = TextPrimary,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp
-                        )
-                    }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "$metalName $conditionSymbol ${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(alert.targetPrice)} $currency",
+                        color = TextPrimary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
                     
                     val sdf = SimpleDateFormat("dd MMM, hh:mm a", Locale.getDefault())
                     val createdDate = Date(alert.createdAt)
                     val statusText = if (alert.triggeredAt != null) {
                         val triggeredDate = Date(alert.triggeredAt)
-                        "Created: ${sdf.format(createdDate)} | Last Hit: ${sdf.format(triggeredDate)}"
+                        "Created: ${sdf.format(createdDate)}\nLast Hit: ${sdf.format(triggeredDate)}"
                     } else {
                         "Created: ${sdf.format(createdDate)}"
                     }
@@ -507,16 +563,23 @@ fun AlertItem(
                     Text(
                         text = statusText,
                         color = TextSecondary,
-                        fontSize = 12.sp
+                        fontSize = 11.5.sp,
+                        lineHeight = 16.sp
                     )
                 }
             }
 
-            IconButton(onClick = onDelete) {
+            Spacer(modifier = Modifier.width(8.dp))
+
+            IconButton(
+                onClick = onDelete,
+                modifier = Modifier.size(36.dp)
+            ) {
                 Icon(
                     imageVector = Icons.Default.Delete,
-                    contentDescription = "Delete",
-                    tint = AccentRed
+                    contentDescription = "Delete Alert",
+                    tint = AccentRed,
+                    modifier = Modifier.size(22.dp)
                 )
             }
         }

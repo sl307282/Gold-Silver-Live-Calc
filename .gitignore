@@ -12,13 +12,17 @@ local.properties
 node_modules/
 firestore-sync/node_modules/
 
-# Firebase Service Account Credentials (DO NOT COMMIT!)
+# Firebase Service Account Credentials & Data dumps (DO NOT COMMIT!)
 firestore-sync/serviceAccountKey.json
+firestore-sync/firebase_history_import.json
 
-# Keystore files (DO NOT COMMIT — stored as GitHub Secret)
+# Keystore & build binary files
 *.jks
 *.keystore
-app/release/*.aab
+*.aab
+*.apk
+app/release/
+release/
 
 # IDE files
 .idea/

@@ -31,7 +31,11 @@ class MetalRepository(
 
     fun getLatestRateFlow(): Flow<RateEntity?> = rateDao.getLatestRateFlow()
 
+    fun getLatestRateForCurrencyFlow(currency: String): Flow<RateEntity?> = rateDao.getLatestRateForCurrencyFlow(currency)
+
     fun getHistoricalRatesFlow(): Flow<List<RateEntity>> = rateDao.getHistoricalRatesFlow()
+
+    fun getHistoricalRatesForCurrencyFlow(currency: String): Flow<List<RateEntity>> = rateDao.getHistoricalRatesForCurrencyFlow(currency)
 
     suspend fun getLatestRate(): RateEntity? = rateDao.getLatestRate()
 
@@ -80,7 +84,7 @@ class MetalRepository(
     suspend fun checkAndTriggerAlerts(rate: RateEntity) = withContext(Dispatchers.IO) {
         val activeAlerts = alertDao.getActiveAlerts()
         val sharedPrefs = context.getSharedPreferences("gold_silver_prefs", Context.MODE_PRIVATE)
-        val isNotificationsEnabled = sharedPrefs.getBoolean("notifications_enabled", false)
+        val isNotificationsEnabled = sharedPrefs.getBoolean("notifications_enabled", true)
         val notificationHelper = com.goldsilver.livecalc.background.NotificationHelper(context)
 
         for (alert in activeAlerts) {
@@ -151,6 +155,17 @@ class MetalRepository(
             }
         }
 
+        fun getOptionalDouble(name: String): Double? {
+            val field = fields.optJSONObject(name) ?: return null
+            val value = when {
+                field.has("doubleValue") -> field.getDouble("doubleValue")
+                field.has("integerValue") -> field.getLong("integerValue").toDouble()
+                field.has("stringValue") -> field.getString("stringValue").toDoubleOrNull()
+                else -> null
+            }
+            return if (value != null && value > 0.0) value else null
+        }
+
         fun getLong(name: String): Long {
             val field = fields.optJSONObject(name) ?: return 0L
             return when {
@@ -174,6 +189,16 @@ class MetalRepository(
         val silverPrice = getDouble("silverPrice")
         val currency = getString("currency").ifBlank { defaultCurrency }
 
+        val prevTradingDayGoldPrice = getOptionalDouble("prevTradingDayGoldPrice")
+            ?: getOptionalDouble("prevGoldPrice24k")
+            ?: getOptionalDouble("previousCloseGold")
+            ?: getOptionalDouble("prevCloseGold")
+
+        val prevTradingDaySilverPrice = getOptionalDouble("prevTradingDaySilverPrice")
+            ?: getOptionalDouble("prevSilverPrice")
+            ?: getOptionalDouble("previousCloseSilver")
+            ?: getOptionalDouble("prevCloseSilver")
+
         val finalTimestamp = if (timestamp == 0L) System.currentTimeMillis() else timestamp
 
         return RateEntity(
@@ -183,8 +208,115 @@ class MetalRepository(
             goldPrice18k = goldPrice18k,
             goldPrice14k = goldPrice14k,
             silverPrice = silverPrice,
-            currency = currency
+            currency = currency,
+            prevTradingDayGoldPrice = prevTradingDayGoldPrice,
+            prevTradingDaySilverPrice = prevTradingDaySilverPrice
         )
+    }
+
+    suspend fun saveOrUpdateTodayRate(rate: RateEntity) = withContext(Dispatchers.IO) {
+        val rates = rateDao.getRatesByCurrency(rate.currency)
+        val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+        val todayStr = dateFormat.format(java.util.Date(rate.timestamp))
+
+        val existingTodayRate = rates.firstOrNull { r ->
+            r.date == todayStr || dateFormat.format(java.util.Date(r.timestamp)) == todayStr
+        }
+
+        // Look up the immediately previous saved valid rate from DB (strictly before today)
+        val previousRecord = rates
+            .filter { 
+                val d = it.date ?: dateFormat.format(java.util.Date(it.timestamp))
+                d < todayStr
+            }
+            .sortedByDescending { it.timestamp }
+            .firstOrNull { it.goldPrice24k > 0 && it.silverPrice > 0 }
+
+        val prevGold = rate.prevTradingDayGoldPrice ?: previousRecord?.goldPrice24k
+        val prevSilver = rate.prevTradingDaySilverPrice ?: previousRecord?.silverPrice
+
+        val rateWithMetadata = rate.copy(
+            date = todayStr,
+            unit = rate.unit ?: "gram",
+            prevTradingDayGoldPrice = prevGold,
+            prevTradingDaySilverPrice = prevSilver
+        )
+
+        if (existingTodayRate != null) {
+            // Update today's record in place with the latest price
+            rateDao.updateRate(
+                rateWithMetadata.copy(id = existingTodayRate.id)
+            )
+        } else {
+            // New day record
+            rateDao.insertRate(rateWithMetadata.copy(id = 0))
+        }
+
+        // Enforce rolling 1-year window in local storage
+        val oneYearAgoTimestamp = System.currentTimeMillis() - (365L * 24L * 60L * 60L * 1000L)
+        rateDao.deleteRatesOlderThan(oneYearAgoTimestamp)
+    }
+
+    private suspend fun syncHistoryJsonToRoom(jsonString: String, currency: String) = withContext(Dispatchers.IO) {
+        try {
+            val root = JSONObject(jsonString)
+            val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+            val existingRates = rateDao.getRatesByCurrency(currency).associateBy { 
+                it.date ?: dateFormat.format(java.util.Date(it.timestamp)) 
+            }
+            val (gold22kRatio, gold18kRatio, gold14kRatio) = Triple(0.9167, 0.75, 0.5833)
+
+            root.keys().forEach { dateKey ->
+                try {
+                    val dayObj = root.optJSONObject(dateKey) ?: return@forEach
+                    val goldPrice24k = dayObj.optDouble("goldPrice24k", 0.0).takeIf { it > 0 } ?: return@forEach
+                    val silverPrice = dayObj.optDouble("silverPrice", 0.0).takeIf { it > 0 } ?: return@forEach
+                    val goldPrice22k = dayObj.optDouble("goldPrice22k", goldPrice24k * gold22kRatio)
+                    val goldPrice18k = dayObj.optDouble("goldPrice18k", goldPrice24k * gold18kRatio)
+                    val goldPrice14k = dayObj.optDouble("goldPrice14k", goldPrice24k * gold14kRatio)
+
+                    val ts = dayObj.optLong("timestamp", 0L).takeIf { it > 0 }
+                        ?: (dateFormat.parse(dateKey)?.time ?: System.currentTimeMillis())
+
+                    val existing = existingRates[dateKey]
+                    val entity = RateEntity(
+                        id = existing?.id ?: 0,
+                        date = dateKey,
+                        unit = dayObj.optString("unit", "gram"),
+                        currency = currency,
+                        timestamp = ts,
+                        goldPrice24k = goldPrice24k,
+                        goldPrice22k = goldPrice22k,
+                        goldPrice18k = goldPrice18k,
+                        goldPrice14k = goldPrice14k,
+                        silverPrice = silverPrice
+                    )
+
+                    if (existing != null) {
+                        rateDao.updateRate(entity)
+                    } else {
+                        rateDao.insertRate(entity)
+                    }
+                } catch (ignored: Exception) {}
+            }
+
+            // Enforce rolling 1-year window: delete records older than 365 days from local Room database
+            val oneYearAgoTimestamp = System.currentTimeMillis() - (365L * 24L * 60L * 60L * 1000L)
+            rateDao.deleteRatesOlderThan(oneYearAgoTimestamp)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun getStartOfDay(timestamp: Long): Long {
+        val cal = java.util.Calendar.getInstance().apply {
+            timeInMillis = timestamp
+            set(java.util.Calendar.HOUR_OF_DAY, 0)
+            set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }
+        return cal.timeInMillis
     }
 
     // Fetch and sync rates (Sync with Cloud Firestore or Firebase Realtime Database)
@@ -197,26 +329,23 @@ class MetalRepository(
             if (latestCached != null && latestCached.currency != currency) {
                 rateDao.deleteAllRates()
             }
-            seedHistoricalDataIfEmpty(currency)
 
             val dbUrl = firebaseDatabaseUrl.trim()
             if (dbUrl.isBlank()) {
-                // No firebase url, fall back to offline simulation
-                val simulatedRate = generateSimulatedRate(currency)
-                rateDao.insertRate(simulatedRate)
-                checkAndTriggerAlerts(simulatedRate)
-                return@withContext Result.success(simulatedRate)
+                val latestCachedRate = rateDao.getLatestRate()
+                return@withContext if (latestCachedRate != null) {
+                    Result.success(latestCachedRate)
+                } else {
+                    Result.failure(Exception("Firebase Database URL is not configured."))
+                }
             }
 
-            // Construct the REST endpoint url.
-            // If it starts with http/https, use it directly. Otherwise, treat it as a Firestore Project ID.
-            val fetchUrl = if (dbUrl.startsWith("http://") || dbUrl.startsWith("https://")) {
-                if (dbUrl.contains(".firebaseio.com") || dbUrl.contains(".firebasedatabase.app")) {
-                    val normalizedUrl = if (dbUrl.endsWith("/")) dbUrl else "$dbUrl/"
-                    "${normalizedUrl}rates/$currency.json"
-                } else {
-                    dbUrl
-                }
+            val isFirestore = !dbUrl.startsWith("http://") && !dbUrl.startsWith("https://")
+
+            // 1. Fetch Latest Snapshot
+            val fetchUrl = if (!isFirestore) {
+                val normalizedUrl = if (dbUrl.endsWith("/")) dbUrl else "$dbUrl/"
+                "${normalizedUrl}rates/$currency.json"
             } else {
                 "https://firestore.googleapis.com/v1/projects/$dbUrl/databases/(default)/documents/rates/$currency"
             }
@@ -225,7 +354,7 @@ class MetalRepository(
                 .url(fetchUrl)
                 .build()
 
-            okHttpClient.newCall(request).execute().use { response ->
+            val parsedRate: RateEntity = okHttpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
                     throw java.io.IOException("Firebase response error: ${response.code} ${response.message}")
                 }
@@ -235,139 +364,60 @@ class MetalRepository(
                 }
 
                 // Dual-compatibility parser: Firestore format contains "fields" key
-                val parsedRate = if (responseBody.contains("\"fields\"")) {
+                if (responseBody.contains("\"fields\"")) {
                     parseFirestoreJson(responseBody, currency)
                 } else {
                     json.decodeFromString<RateEntity>(responseBody)
                 }
-
-                // Ensure id is not saved from database to avoid key collisions
-                val rateToSave = parsedRate.copy(id = 0)
-                rateDao.insertRate(rateToSave)
-                checkAndTriggerAlerts(rateToSave)
-                Result.success(rateToSave)
             }
+
+            // 2. Fetch history if present in Firebase Realtime DB to populate historical records
+            try {
+                if (!isFirestore) {
+                    val normalizedUrl = if (dbUrl.endsWith("/")) dbUrl else "$dbUrl/"
+                    val historyUrl = "${normalizedUrl}history/$currency.json"
+                    val historyReq = okhttp3.Request.Builder().url(historyUrl).build()
+                    okHttpClient.newCall(historyReq).execute().use { histResp ->
+                        if (histResp.isSuccessful) {
+                            val histBody = histResp.body?.string()
+                            if (!histBody.isNullOrBlank() && histBody != "null") {
+                                syncHistoryJsonToRoom(histBody, currency)
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
+            // Save or update today's record
+            val rateToSave = parsedRate.copy(id = 0)
+            saveOrUpdateTodayRate(rateToSave)
+            checkAndTriggerAlerts(rateToSave)
+            Result.success(rateToSave)
         } catch (e: Exception) {
             e.printStackTrace()
             val errorMsg = e.localizedMessage ?: e.toString()
             apiError.value = errorMsg
-            Result.failure(e)
-        }
-    }
-
-    private fun getBaseRates(currency: String): Pair<Double, Double> {
-        return when (currency) {
-            "INR" -> Pair(14630.0, 233.0) // Gold: ₹14,630/g, Silver: ₹233/g
-            "EUR" -> Pair(123.0, 2.76)
-            "AED" -> Pair(491.0, 11.0)
-            "GBP" -> Pair(105.0, 2.35)
-            else -> Pair(133.74, 3.00) // USD: Gold $133.74/g, Silver $3.00/g
-        }
-    }
-
-    // Helper to generate simulated rates with mild randomness
-    suspend fun generateSimulatedRate(currency: String): RateEntity {
-        val (actualBaseGold, actualBaseSilver) = getBaseRates(currency)
-        
-        // If the latest cached price is too far from base (e.g. > 1.5%), pull it back to the base rate
-        val latestCached = rateDao.getLatestRate()
-        val baseGold24k = if (latestCached != null && latestCached.currency == currency && 
-            Math.abs(latestCached.goldPrice24k - actualBaseGold) / actualBaseGold < 0.015) {
-            latestCached.goldPrice24k
-        } else {
-            actualBaseGold
-        }
-        
-        val baseSilver = if (latestCached != null && latestCached.currency == currency && 
-            Math.abs(latestCached.silverPrice - actualBaseSilver) / actualBaseSilver < 0.02) {
-            latestCached.silverPrice
-        } else {
-            actualBaseSilver
-        }
-
-        // Apply a tiny random walk offset from the base, but with a small dampening factor towards the actual base
-        val goldScale = actualBaseGold * 0.0008
-        val silverScale = actualBaseSilver * 0.0016
-        
-        // Pull towards base slightly (mean reversion)
-        val pullGold = (actualBaseGold - baseGold24k) * 0.1
-        val pullSilver = (actualBaseSilver - baseSilver) * 0.1
-        
-        val randomOffsetGold = pullGold + (if (Math.random() > 0.5) 1 else -1) * (actualBaseGold * 0.0001 + Math.random() * goldScale)
-        val randomOffsetSilver = pullSilver + (if (Math.random() > 0.5) 1 else -1) * (actualBaseSilver * 0.0002 + Math.random() * silverScale)
-
-        val finalGold24k = baseGold24k + randomOffsetGold
-        val finalSilver = baseSilver + randomOffsetSilver
-
-        val (gold22kRatio, gold18kRatio, gold14kRatio) = Triple(0.9167, 0.75, 0.5833)
-
-        return RateEntity(
-            timestamp = System.currentTimeMillis(),
-            goldPrice24k = finalGold24k,
-            goldPrice22k = finalGold24k * gold22kRatio,
-            goldPrice18k = finalGold24k * gold18kRatio,
-            goldPrice14k = finalGold24k * gold14kRatio,
-            silverPrice = finalSilver,
-            currency = currency
-        )
-    }
-
-    private fun getCurrencyMultiplier(currency: String): Double {
-        return when (currency) {
-            "INR" -> 83.50
-            "EUR" -> 0.92
-            "AED" -> 3.67
-            "GBP" -> 0.78
-            else -> 1.0 // USD
-        }
-    }
-
-    suspend fun seedHistoricalDataIfEmpty(currency: String) = withContext(Dispatchers.IO) {
-        val existingRates = rateDao.getHistoricalRates()
-        val count = existingRates.size
-
-        // If currency changed, clear rates table
-        if (count > 0 && existingRates[0].currency != currency) {
-            rateDao.deleteAllRates()
-        }
-
-        val currentCount = rateDao.getHistoricalRates().size
-        if (currentCount == 0) {
-            // Seed 30 days of data ending today
-            val now = System.currentTimeMillis()
-            val dayMillis = 24 * 60 * 60 * 1000L
-            val (baseGold, baseSilver) = getBaseRates(currency)
-
-            val (gold22kRatio, gold18kRatio, gold14kRatio) = Triple(0.9167, 0.75, 0.5833)
-
-            for (i in 30 downTo 1) {
-                val dayTime = now - (i * dayMillis)
-                // Use a sine wave + minor random noise for realistic looking chart trends
-                val factor = Math.sin(i.toDouble() / 5.0) * (baseGold * 0.015) + (Math.random() - 0.5) * (baseGold * 0.008)
-                val goldVal = baseGold + factor
-                val silverFactor = Math.sin(i.toDouble() / 6.0) * (baseSilver * 0.03) + (Math.random() - 0.5) * (baseSilver * 0.015)
-                val silverVal = baseSilver + silverFactor
-
-                val seedEntity = RateEntity(
-                    timestamp = dayTime,
-                    goldPrice24k = goldVal,
-                    goldPrice22k = goldVal * gold22kRatio,
-                    goldPrice18k = goldVal * gold18kRatio,
-                    goldPrice14k = goldVal * gold14kRatio,
-                    silverPrice = silverVal,
-                    currency = currency
-                )
-                rateDao.insertRate(seedEntity)
+            val latestCachedRate = rateDao.getLatestRate()
+            if (latestCachedRate != null) {
+                Result.success(latestCachedRate)
+            } else {
+                Result.failure(e)
             }
         }
     }
 
+
     suspend fun fetchRemoteConfig(): Map<String, Any> = withContext(Dispatchers.IO) {
+
         try {
+            if (com.google.firebase.FirebaseApp.getApps(context).isEmpty()) {
+                com.google.firebase.FirebaseApp.initializeApp(context)
+            }
             val remoteConfig = com.google.firebase.remoteconfig.FirebaseRemoteConfig.getInstance()
             val configSettings = com.google.firebase.remoteconfig.remoteConfigSettings {
-                // Always fetch fresh in debug; in release fetch every hour
-                minimumFetchIntervalInSeconds = if (com.goldsilver.livecalc.BuildConfig.DEBUG) 0 else 3600
+                minimumFetchIntervalInSeconds = 0L
             }
             remoteConfig.setConfigSettingsAsync(configSettings)
 
@@ -376,69 +426,115 @@ class MetalRepository(
             val defaults = mapOf(
                 "latest_version" to currentName,
                 "app_version" to currentName,
+                "version_name" to currentName,
                 "latest_version_code" to currentCode,
                 "app_version_code" to currentCode,
-                "update_message" to "A newer version of Gold & Silver Live Calc is available. Please update to access the latest market rates and features.",
-                "apk_download_url" to ""  // GitHub Releases direct APK download URL
+                "version_code" to currentCode,
+                "update_message" to "A new version is ready with the latest rates and improvements.",
+                "apk_download_url" to ""
             )
             remoteConfig.setDefaultsAsync(defaults)
 
-            suspendCancellableCoroutine<Map<String, Any>> { continuation ->
-                remoteConfig.fetchAndActivate()
-                    .addOnCompleteListener { _ ->
-                        // Read latest_version_code; fall back to app_version_code if zero/missing
-                        val rawLatestCode = remoteConfig.getLong("latest_version_code")
-                        val rawAppCode = remoteConfig.getLong("app_version_code")
-                        val latestCode = (if (rawLatestCode > 0) rawLatestCode else rawAppCode).toInt()
+            val remoteResult = kotlinx.coroutines.withTimeoutOrNull(6000L) {
+                suspendCancellableCoroutine<Map<String, Any>> { continuation ->
+                    fun extractConfig(): Map<String, Any> {
+                        remoteConfig.activate()
+                        val code1 = remoteConfig.getLong("latest_version_code")
+                        val code2 = remoteConfig.getString("latest_version_code").toLongOrNull() ?: 0L
+                        val code3 = remoteConfig.getLong("app_version_code")
+                        val code4 = remoteConfig.getString("app_version_code").toLongOrNull() ?: 0L
+                        val code5 = remoteConfig.getLong("version_code")
+                        val code6 = remoteConfig.getString("version_code").toLongOrNull() ?: 0L
+                        val latestCode = maxOf(code1, code2, code3, code4, code5, code6).toInt()
 
-                        // Read version name; fall back to app_version
-                        val rawLatestName = remoteConfig.getString("latest_version")
-                        val rawAppName = remoteConfig.getString("app_version")
-                        val latestName = rawLatestName.ifBlank { rawAppName }
+                        val name1 = remoteConfig.getString("latest_version")
+                        val name2 = remoteConfig.getString("app_version")
+                        val name3 = remoteConfig.getString("version_name")
+                        val name4 = remoteConfig.getString("version")
+                        val latestName = listOf(name1, name2, name3, name4).firstOrNull { it.isNotBlank() } ?: currentName
 
-                        val message = remoteConfig.getString("update_message")
+                        val msg1 = remoteConfig.getString("update_message")
+                        val msg2 = remoteConfig.getString("message")
+                        val message = if (msg1.isNotBlank()) msg1 else if (msg2.isNotBlank()) msg2 else ""
+
                         val apkUrl = remoteConfig.getString("apk_download_url")
-                        if (continuation.isActive) {
-                            continuation.resume(
-                                mapOf(
-                                    "latest_version" to latestName,
-                                    "latest_version_code" to latestCode,
-                                    "update_message" to message,
-                                    "apk_download_url" to apkUrl
-                                )
-                            )
-                        }
-                    }
-                    .addOnFailureListener {
-                        // On fetch failure, still try to read cached/default values
-                        val rawLatestCode = remoteConfig.getLong("latest_version_code")
-                        val rawAppCode = remoteConfig.getLong("app_version_code")
-                        val latestCode = (if (rawLatestCode > 0) rawLatestCode else rawAppCode).toInt()
 
-                        val rawLatestName = remoteConfig.getString("latest_version")
-                        val rawAppName = remoteConfig.getString("app_version")
-                        val latestName = rawLatestName.ifBlank { rawAppName }
+                        android.util.Log.d("RemoteConfig", "Fetched latestCode=$latestCode (currentCode=$currentCode), latestName=$latestName")
 
-                        val message = remoteConfig.getString("update_message")
-                        val apkUrl = remoteConfig.getString("apk_download_url")
-                        if (continuation.isActive) {
-                            continuation.resume(
-                                mapOf(
-                                    "latest_version" to latestName,
-                                    "latest_version_code" to latestCode,
-                                    "update_message" to message,
-                                    "apk_download_url" to apkUrl
-                                )
-                            )
-                        }
+                        return mapOf(
+                            "latest_version" to latestName,
+                            "latest_version_code" to latestCode,
+                            "update_message" to message,
+                            "apk_download_url" to apkUrl
+                        )
                     }
+
+                    // Use explicit fetch(0L) to bypass any client-side cache
+                    remoteConfig.fetch(0L)
+                        .addOnCompleteListener { fetchTask ->
+                            if (fetchTask.isSuccessful) {
+                                remoteConfig.activate().addOnCompleteListener {
+                                    if (continuation.isActive) continuation.resume(extractConfig())
+                                }
+                            } else {
+                                if (continuation.isActive) continuation.resume(extractConfig())
+                            }
+                        }
+                        .addOnFailureListener { e ->
+                            android.util.Log.w("RemoteConfig", "fetch(0L) failed: ${e.message}", e)
+                            if (continuation.isActive) {
+                                continuation.resume(extractConfig())
+                            }
+                        }
+                }
             }
+
+            if (remoteResult != null && (remoteResult["latest_version_code"] as? Int ?: 0) > currentCode) {
+                return@withContext remoteResult
+            }
+
+            // Realtime DB fallback in case configuration was stored under /config, /update, or /rates
+            val dbUrl = firebaseDatabaseUrl.trim()
+            if (dbUrl.isNotBlank() && (dbUrl.startsWith("http://") || dbUrl.startsWith("https://"))) {
+                try {
+                    val normalizedUrl = if (dbUrl.endsWith("/")) dbUrl else "$dbUrl/"
+                    for (endpoint in listOf("config.json", "update.json", "version.json", "rates/INR.json", "rates.json")) {
+                        val req = okhttp3.Request.Builder().url("$normalizedUrl$endpoint").build()
+                        okHttpClient.newCall(req).execute().use { resp ->
+                            if (resp.isSuccessful) {
+                                val bodyStr = resp.body?.string()
+                                if (!bodyStr.isNullOrBlank() && bodyStr != "null") {
+                                    val jsonObj = JSONObject(bodyStr)
+                                    val dbCode = jsonObj.optInt("latest_version_code", jsonObj.optInt("version_code", jsonObj.optInt("versionCode", 0)))
+                                    val dbName = jsonObj.optString("latest_version", jsonObj.optString("version_name", jsonObj.optString("versionName", "")))
+                                    val dbMsg = jsonObj.optString("update_message", jsonObj.optString("message", ""))
+                                    if (dbCode > currentCode) {
+                                        return@withContext mapOf(
+                                            "latest_version" to dbName,
+                                            "latest_version_code" to dbCode,
+                                            "update_message" to dbMsg,
+                                            "apk_download_url" to ""
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch (ignored: Exception) {}
+            }
+
+            return@withContext remoteResult ?: mapOf(
+                "latest_version" to currentName,
+                "latest_version_code" to currentCode.toInt(),
+                "update_message" to "",
+                "apk_download_url" to ""
+            )
         } catch (e: Exception) {
             e.printStackTrace()
             mapOf(
                 "latest_version" to com.goldsilver.livecalc.BuildConfig.VERSION_NAME,
                 "latest_version_code" to com.goldsilver.livecalc.BuildConfig.VERSION_CODE,
-                "update_message" to "A newer version of Gold & Silver Live Calc is available.",
+                "update_message" to "A new version is ready with the latest rates and improvements.",
                 "apk_download_url" to ""
             )
         }

@@ -19,6 +19,7 @@ android {
         versionName "1.2.2"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        resourceConfigurations += ["en", "hi"]
         vectorDrawables {
             useSupportLibrary true
         }
@@ -26,8 +27,12 @@ android {
 
     buildTypes {
         release {
-            minifyEnabled false
+            minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            minifyEnabled false
         }
     }
     compileOptions {
@@ -43,7 +48,15 @@ android {
     }
     packaging {
         resources {
-            excludes += '/META-INF/{AL2.0,LGPL2.1}'
+            excludes += [
+                '/META-INF/{AL2.0,LGPL2.1}',
+                'META-INF/DEPENDENCIES',
+                'META-INF/LICENSE*',
+                'META-INF/NOTICE*',
+                'META-INF/*.kotlin_module',
+                'META-INF/ASL2.0',
+                'META-INF/LGPL2.1'
+            ]
         }
     }
 }

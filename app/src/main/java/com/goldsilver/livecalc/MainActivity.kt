@@ -32,7 +32,10 @@ class MainActivity : ComponentActivity() {
     private val viewModel: GoldSilverViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        enableEdgeToEdge()
+        enableEdgeToEdge(
+            statusBarStyle = androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+        )
 
         // Ensure the splash screen stays visible for at least 1.5 seconds
         var isMinimumTimePassed = false
@@ -60,12 +63,9 @@ class MainActivity : ComponentActivity() {
                 fadeOut.doOnEnd { splashScreenView.remove() }
                 fadeOut.start()
             }
-        } else {
-            // For Android 11 and below, we bypass the AndroidX library completely to avoid double logos
-            // and use our pixel-perfect layered windowBackground. We simply switch to the main theme here.
-            setTheme(R.style.Theme_GoldSilverLiveCalc)
         }
-
+        
+        setTheme(R.style.Theme_GoldSilverLiveCalc)
         super.onCreate(savedInstanceState)
         
         // On Android 11 and below, manually delay the first frame draw to hold the legacy splash screen
@@ -144,7 +144,9 @@ class MainActivity : ComponentActivity() {
                 )
 
                 Scaffold(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .statusBarsPadding(),
                     contentWindowInsets = WindowInsets(0, 0, 0, 0),
                     bottomBar = {
                         if (showBottomBar) {

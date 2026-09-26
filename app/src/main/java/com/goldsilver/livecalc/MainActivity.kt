@@ -23,7 +23,7 @@ import androidx.navigation.compose.rememberNavController
 import com.goldsilver.livecalc.ui.components.AppUpdateDialog
 import com.goldsilver.livecalc.ui.components.CustomBottomNavigation
 import com.goldsilver.livecalc.ui.screens.*
-import com.goldsilver.livecalc.ui.theme.GoldSilverLiveCalcTheme
+import com.goldsilver.livecalc.ui.theme.*
 import com.goldsilver.livecalc.ui.viewmodel.GoldSilverViewModel
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts

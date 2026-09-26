@@ -66,8 +66,10 @@ class MainActivity : ComponentActivity() {
             }
         }
         
+        requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
         setTheme(R.style.Theme_GoldSilverLiveCalc)
         super.onCreate(savedInstanceState)
+        actionBar?.hide()
         
         WindowCompat.setDecorFitsSystemWindows(window, false)
         val insetsController = WindowCompat.getInsetsController(window, window.decorView)

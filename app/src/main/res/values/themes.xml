@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Base application theme. -->
-    <style name="Theme.GoldSilverLiveCalc" parent="Theme.AppCompat.NoActionBar">
+    <style name="Theme.GoldSilverLiveCalc" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionBar">false</item>
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:statusBarColor">#050505</item>
@@ -12,7 +14,9 @@
 
     <!-- Legacy Splash Screen Theme (Android 11 and below) -->
     <!-- Bypasses AndroidX core-splashscreen because it doesn't support bottom branding -->
-    <style name="Theme.GoldSilverLiveCalc.Splash" parent="Theme.AppCompat.NoActionBar">
+    <style name="Theme.GoldSilverLiveCalc.Splash" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionBar">false</item>
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:windowBackground">@drawable/splash_background_legacy</item>

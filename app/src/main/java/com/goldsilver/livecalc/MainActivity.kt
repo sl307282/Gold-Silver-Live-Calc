@@ -152,9 +152,8 @@ class MainActivity : ComponentActivity() {
                 )
 
                 Scaffold(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .statusBarsPadding(),
+                    modifier = Modifier.fillMaxSize(),
+                    containerColor = DarkBackground,
                     contentWindowInsets = WindowInsets(0, 0, 0, 0),
                     bottomBar = {
                         if (showBottomBar) {

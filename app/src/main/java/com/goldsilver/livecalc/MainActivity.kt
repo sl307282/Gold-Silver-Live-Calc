@@ -3,7 +3,6 @@ package com.goldsilver.livecalc
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.core.animation.doOnEnd
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.delay
@@ -32,8 +31,6 @@ class MainActivity : ComponentActivity() {
     private val viewModel: GoldSilverViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        enableEdgeToEdge()
-
         // Ensure the splash screen stays visible for at least 1.5 seconds
         var isMinimumTimePassed = false
         lifecycleScope.launch {
@@ -145,7 +142,6 @@ class MainActivity : ComponentActivity() {
 
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
-                    contentWindowInsets = WindowInsets(0, 0, 0, 0),
                     bottomBar = {
                         if (showBottomBar) {
                             CustomBottomNavigation(

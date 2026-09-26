@@ -27,7 +27,6 @@ import com.goldsilver.livecalc.ui.theme.DarkSurface
 import com.goldsilver.livecalc.ui.theme.GoldPrimary
 import com.goldsilver.livecalc.ui.theme.isSystemDarkThemeGlobal
 import com.goldsilver.livecalc.util.LocalAppStrings
-import androidx.compose.material3.Surface
 import androidx.compose.material3.HorizontalDivider
 
 data class NavItem(
@@ -51,66 +50,58 @@ fun CustomBottomNavigation(
         NavItem("settings", strings.tabSettings, Icons.Default.Settings)
     )
 
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        color = DarkSurface
-    ) {
-        Column(
+    Column(modifier = modifier) {
+        HorizontalDivider(
+            color = if (isSystemDarkThemeGlobal) Color(0xFF2C2C2C) else Color(0xFFE5E5EA),
+            thickness = 0.5.dp
+        )
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .windowInsetsPadding(WindowInsets.navigationBars)
+                .height(72.dp)
+                .background(DarkSurface)
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceAround,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            HorizontalDivider(
-                color = if (isSystemDarkThemeGlobal) Color(0xFF2C2C2C) else Color(0xFFE5E5EA),
-                thickness = 0.5.dp
-            )
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(64.dp)
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceAround,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                items.forEach { item ->
-                    val isSelected = currentRoute == item.route
-                    val scale by animateFloatAsState(targetValue = if (isSelected) 1.15f else 1.0f, label = "scale")
-                    val selectedColor = if (item.route == "hallmark") Color(0xFF10B981) else GoldPrimary
-                    val tintColor by animateColorAsState(
-                        targetValue = if (isSelected) selectedColor else (if (isSystemDarkThemeGlobal) Color(0xFF8E8E93) else Color(0xFF757575)), 
-                        label = "color"
-                    )
+            items.forEach { item ->
+                val isSelected = currentRoute == item.route
+                val scale by animateFloatAsState(targetValue = if (isSelected) 1.15f else 1.0f, label = "scale")
+                val selectedColor = if (item.route == "hallmark") Color(0xFF10B981) else GoldPrimary
+                val tintColor by animateColorAsState(
+                    targetValue = if (isSelected) selectedColor else (if (isSystemDarkThemeGlobal) Color(0xFF8E8E93) else Color(0xFF757575)), 
+                    label = "color"
+                )
 
-                    Column(
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) {
+                            onNavigate(item.route)
+                        }
+                        .padding(vertical = 4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = item.icon,
+                        contentDescription = item.title,
+                        tint = tintColor,
                         modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(12.dp))
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null
-                            ) {
-                                onNavigate(item.route)
-                            }
-                            .padding(vertical = 4.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = item.icon,
-                            contentDescription = item.title,
-                            tint = tintColor,
-                            modifier = Modifier
-                                .size(24.dp)
-                                .scale(scale)
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = item.title,
-                            color = tintColor,
-                            fontSize = 11.sp,
-                            maxLines = 1
-                        )
-                    }
+                            .size(24.dp)
+                            .scale(scale)
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = item.title,
+                        color = tintColor,
+                        fontSize = 11.sp,
+                        maxLines = 1
+                    )
                 }
             }
         }

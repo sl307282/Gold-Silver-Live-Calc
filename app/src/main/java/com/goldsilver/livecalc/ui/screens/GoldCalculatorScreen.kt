@@ -34,7 +34,7 @@ import com.goldsilver.livecalc.ui.theme.*
 import com.goldsilver.livecalc.ui.viewmodel.GoldSilverViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun GoldCalculatorScreen(
     viewModel: GoldSilverViewModel,
@@ -152,7 +152,10 @@ fun GoldCalculatorScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .imePadding()
+                .imeNestedScroll()
                 .padding(horizontal = 16.dp),
+            contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
 

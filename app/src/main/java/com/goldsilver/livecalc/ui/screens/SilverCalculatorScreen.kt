@@ -153,7 +153,6 @@ fun SilverCalculatorScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .imePadding()
-                .imeNestedScroll()
                 .padding(horizontal = 16.dp),
             contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)

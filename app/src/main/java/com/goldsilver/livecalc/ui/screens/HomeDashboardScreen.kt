@@ -1,5 +1,6 @@
 package com.goldsilver.livecalc.ui.screens
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -14,6 +15,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import com.goldsilver.livecalc.ui.components.PriceChangeIndicator
 import com.goldsilver.livecalc.ui.theme.*
 import com.goldsilver.livecalc.ui.viewmodel.GoldSilverViewModel
+import com.goldsilver.livecalc.util.IndianCurrencyFormatter
 import com.goldsilver.livecalc.util.LocalAppStrings
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -44,6 +47,7 @@ fun HomeDashboardScreen(
 ) {
     val strings = LocalAppStrings.current
     val latestRate by viewModel.latestRate.collectAsStateWithLifecycle()
+    val previousRate by viewModel.previousTradingDayRate.collectAsStateWithLifecycle()
     val goldChange by viewModel.goldChangePercent.collectAsStateWithLifecycle()
     val silverChange by viewModel.silverChangePercent.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
@@ -113,7 +117,8 @@ fun HomeDashboardScreen(
 
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                contentPadding = PaddingValues(bottom = 32.dp)
             ) {
                 item {
                     Spacer(modifier = Modifier.height(2.dp))
@@ -122,18 +127,28 @@ fun HomeDashboardScreen(
                 // Live Gold Card
                 item {
                     latestRate?.let { rate ->
+                        val prevGoldPrice = rate.prevTradingDayGoldPrice ?: previousRate?.goldPrice24k
+                        val goldDiffAmount = if (prevGoldPrice != null && prevGoldPrice > 0) rate.goldPrice24k - prevGoldPrice else null
+
                         MetalRateCard(
-                            title = "${strings.goldRates} (XAU)",
-                            primaryPrice = "${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(rate.goldPrice24k)} $currency${strings.perGram}",
+                            title = "Gold (XAU)",
+                            primaryPrice = "${IndianCurrencyFormatter.formatCurrencyINR(rate.goldPrice24k)} / g",
                             changePercent = goldChange,
+                            diffAmount = goldDiffAmount,
                             isGold = true,
                             purityList = listOf(
-                                strings.purity24kDesc to rate.goldPrice24k,
-                                strings.purity22kDesc to rate.goldPrice22k,
-                                strings.purity18kDesc to rate.goldPrice18k,
-                                strings.purity14kDesc to rate.goldPrice14k
+                                "24K (99.9%)" to rate.goldPrice24k,
+                                "22K (91.6%)" to rate.goldPrice22k,
+                                "18K (75.0%)" to rate.goldPrice18k,
+                                "14K (58.3%)" to rate.goldPrice14k
                             ),
-                            currency = currency
+                            weightList = listOf(
+                                "1 g" to rate.goldPrice24k,
+                                "10 g" to rate.goldPrice24k * 10,
+                                "1 tola (11.66 g)" to rate.goldPrice24k * 11.6638,
+                                "1 kg" to rate.goldPrice24k * 1000
+                            ),
+                            onCardClick = { onNavigate("gold_calc") }
                         )
                     } ?: run {
                         Box(
@@ -150,23 +165,32 @@ fun HomeDashboardScreen(
                 }
 
                 item {
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                 }
 
                 // Live Silver Card
                 item {
                     latestRate?.let { rate ->
+                        val prevSilverPrice = rate.prevTradingDaySilverPrice ?: previousRate?.silverPrice
+                        val silverDiffAmount = if (prevSilverPrice != null && prevSilverPrice > 0) rate.silverPrice - prevSilverPrice else null
+
                         MetalRateCard(
-                            title = "${strings.silverRates} (XAG)",
-                            primaryPrice = "${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(rate.silverPrice)} $currency${strings.perGram}",
+                            title = "Silver (XAG)",
+                            primaryPrice = "${IndianCurrencyFormatter.formatCurrencyINR(rate.silverPrice)} / g",
                             changePercent = silverChange,
+                            diffAmount = silverDiffAmount,
                             isGold = false,
                             purityList = listOf(
-                                "1 ${strings.weightInGrams.split(" ").first()}" to rate.silverPrice,
-                                "1 Tola (11.66g)" to rate.silverPrice * 11.6638,
-                                "1 Kilogram" to rate.silverPrice * 1000
+                                "999" to rate.silverPrice,
+                                "925 (Sterling)" to rate.silverPrice * 0.925
                             ),
-                            currency = currency
+                            weightList = listOf(
+                                "1 g" to rate.silverPrice,
+                                "10 g" to rate.silverPrice * 10,
+                                "1 tola (11.66 g)" to rate.silverPrice * 11.6638,
+                                "1 kg" to rate.silverPrice * 1000
+                            ),
+                            onCardClick = { onNavigate("silver_calc") }
                         )
                     } ?: run {
                         Box(
@@ -183,7 +207,7 @@ fun HomeDashboardScreen(
                 }
 
                 item {
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
 
                 // Navigation / Action Buttons Grid
@@ -193,17 +217,18 @@ fun HomeDashboardScreen(
                         style = MaterialTheme.typography.labelSmall,
                         color = TextMuted,
                         fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp,
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
 
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             QuickActionButton(
-                                title = strings.goldCalculator,
-                                subtitle = strings.calculatePrice,
+                                title = "Gold Calculator",
+                                subtitle = "Calculate price",
                                 icon = Icons.Filled.Calculate,
                                 backgroundBrush = Brush.linearGradient(
                                     colors = listOf(
@@ -216,12 +241,11 @@ fun HomeDashboardScreen(
                                 subtitleColor = Color(0xFF6B4702),
                                 iconColor = Color(0xFF1A1404),
                                 onClick = { onNavigate("gold_calc") },
-                                modifier = Modifier.weight(1f),
-                                isLarge = true
+                                modifier = Modifier.weight(1f)
                             )
                             QuickActionButton(
-                                title = strings.silverCalculator,
-                                subtitle = strings.calculatePrice,
+                                title = "Silver Calculator",
+                                subtitle = "Calculate price",
                                 icon = Icons.Filled.Calculate,
                                 backgroundBrush = Brush.linearGradient(
                                     colors = listOf(
@@ -234,17 +258,16 @@ fun HomeDashboardScreen(
                                 subtitleColor = Color(0xFF475569),
                                 iconColor = Color(0xFF0F172A),
                                 onClick = { onNavigate("silver_calc") },
-                                modifier = Modifier.weight(1f),
-                                isLarge = true
+                                modifier = Modifier.weight(1f)
                             )
                         }
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             QuickActionButton(
-                                title = strings.tabHallmark,
-                                subtitle = strings.hallmarkBannerSubtitle,
+                                title = "Hallmark",
+                                subtitle = "Verify purity",
                                 icon = Icons.Filled.CheckCircle,
                                 backgroundBrush = Brush.linearGradient(
                                     colors = listOf(
@@ -257,12 +280,11 @@ fun HomeDashboardScreen(
                                 subtitleColor = Color(0xFF065F46),
                                 iconColor = Color(0xFF064E3B),
                                 onClick = { onNavigate("hallmark") },
-                                modifier = Modifier.weight(1f),
-                                isLarge = false
+                                modifier = Modifier.weight(1f)
                             )
                             QuickActionButton(
-                                title = strings.tabAlerts,
-                                subtitle = strings.priceAlertsBannerSubtitle,
+                                title = "Alerts",
+                                subtitle = "Price alerts",
                                 icon = Icons.Filled.Notifications,
                                 backgroundBrush = Brush.linearGradient(
                                     colors = listOf(
@@ -275,8 +297,7 @@ fun HomeDashboardScreen(
                                 subtitleColor = Color(0xFF075985),
                                 iconColor = Color(0xFF0C4A6E),
                                 onClick = { onNavigate("alerts") },
-                                modifier = Modifier.weight(1f),
-                                isLarge = false
+                                modifier = Modifier.weight(1f)
                             )
                         }
                     }
@@ -295,13 +316,15 @@ fun MetalRateCard(
     title: String,
     primaryPrice: String,
     changePercent: Double?,
+    diffAmount: Double?,
     isGold: Boolean,
     purityList: List<Pair<String, Double>>,
-    currency: String,
+    weightList: List<Pair<String, Double>>,
+    onCardClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val strings = LocalAppStrings.current
-    var isExpanded by remember { mutableStateOf(false) }
+    var isExpanded by rememberSaveable { mutableStateOf(false) }
 
     val cardBrush = if (isSystemDarkThemeGlobal) {
         if (isGold) {
@@ -338,11 +361,14 @@ fun MetalRateCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
+            .animateContentSize()
             .border(
                 width = 0.5.dp,
                 color = cardBorderColor,
                 shape = RoundedCornerShape(16.dp)
-            ),
+            )
+            .clip(RoundedCornerShape(16.dp))
+            .clickable { onCardClick() },
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = cardElevation),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent)
@@ -361,9 +387,9 @@ fun MetalRateCard(
                     Text(
                         text = title,
                         color = themeColor,
-                        fontSize = 12.sp,
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
+                        letterSpacing = 0.8.sp
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Box(
@@ -375,7 +401,7 @@ fun MetalRateCard(
                         Text(
                             text = strings.spot,
                             color = themeColor,
-                            fontSize = 9.sp,
+                            style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -388,65 +414,108 @@ fun MetalRateCard(
             Text(
                 text = primaryPrice,
                 color = TextPrimary,
-                fontSize = 28.sp,
+                style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold
             )
 
-            if (isExpanded) {
-                Spacer(modifier = Modifier.height(12.dp))
-                HorizontalDivider(color = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.08f))
-                Spacer(modifier = Modifier.height(12.dp))
+            if (diffAmount != null && changePercent != null) {
+                val isUp = diffAmount > 0.001
+                val isDown = diffAmount < -0.001
+                val arrow = if (isUp) "▲" else if (isDown) "▼" else "—"
+                val color = if (isUp) AccentGreen else if (isDown) AccentRed else TextMuted
+                val absDiff = IndianCurrencyFormatter.formatCurrencyINR(Math.abs(diffAmount))
+                val pctStr = String.format(Locale.US, "%.2f", Math.abs(changePercent))
 
-                // Sub rates
-                purityList.forEach { (label, value) ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(text = label, color = TextSecondary, fontSize = 13.sp)
-                        Text(
-                            text = "${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(value)} $currency",
-                            color = TextPrimary,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "$arrow $absDiff ($pctStr%) ${strings.vsYesterday}",
+                        color = color,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
             }
 
-            Spacer(modifier = Modifier.height(2.dp))
+            if (isExpanded) {
+                Spacer(modifier = Modifier.height(14.dp))
+                HorizontalDivider(color = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.08f))
+                Spacer(modifier = Modifier.height(10.dp))
 
-            // Expand/Collapse Toggle Button
+                // Section 1: PURITY
+                Text(
+                    text = strings.sectionPurity,
+                    color = TextMuted,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                purityList.forEachIndexed { index, (label, value) ->
+                    BreakdownItemRow(label = label, value = value, isFirst = index == 0)
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+                HorizontalDivider(color = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.06f) else Color.Black.copy(alpha = 0.06f))
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Section 2: WEIGHT
+                Text(
+                    text = strings.sectionWeight,
+                    color = TextMuted,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                weightList.forEachIndexed { index, (label, value) ->
+                    BreakdownItemRow(label = label, value = value, isFirst = index == 0)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Expand / Collapse Full-width Text Button
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(8.dp))
                     .clickable { isExpanded = !isExpanded }
-                    .padding(vertical = 6.dp),
-                contentAlignment = Alignment.CenterEnd
+                    .padding(vertical = 8.dp),
+                contentAlignment = Alignment.Center
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Text(
-                        text = if (isExpanded) "▲" else "▼",
-                        color = themeColor,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Icon(
-                        imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                        contentDescription = null,
-                        tint = themeColor,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
+                Text(
+                    text = if (isExpanded) strings.showLess else strings.showBreakdown,
+                    color = themeColor,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
+    }
+}
+
+@Composable
+private fun BreakdownItemRow(label: String, value: Double, isFirst: Boolean) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            color = if (isFirst) TextPrimary else TextSecondary.copy(alpha = 0.7f),
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = if (isFirst) FontWeight.SemiBold else FontWeight.Normal
+        )
+        Text(
+            text = IndianCurrencyFormatter.formatCurrencyINR(value),
+            color = if (isFirst) TextPrimary else TextPrimary.copy(alpha = 0.7f),
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = if (isFirst) FontWeight.Bold else FontWeight.Medium
+        )
     }
 }
 
@@ -461,15 +530,12 @@ fun QuickActionButton(
     subtitleColor: Color,
     iconColor: Color,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    isLarge: Boolean = false
+    modifier: Modifier = Modifier
 ) {
-    val cardHeight = if (isLarge) 78.dp else 65.dp
-    val iconBadgeSize = if (isLarge) 42.dp else 36.dp
-    val iconSize = if (isLarge) 22.dp else 18.dp
-    val titleSize = if (isLarge) 14.5.sp else 12.5.sp
-    val subtitleSize = if (isLarge) 10.5.sp else 9.5.sp
-    val chevronSize = if (isLarge) 18.dp else 16.dp
+    val cardHeight = 82.dp
+    val iconBadgeSize = 40.dp
+    val iconSize = 20.dp
+    val chevronSize = 16.dp
 
     Card(
         modifier = modifier
@@ -478,14 +544,14 @@ fun QuickActionButton(
             .clickable { onClick() }
             .border(BorderStroke(1.5.dp, borderColor), RoundedCornerShape(16.dp)),
         shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isLarge) 3.5.dp else 2.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.5.dp),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxSize()
                 .background(backgroundBrush)
-                .padding(horizontal = if (isLarge) 12.dp else 10.dp, vertical = if (isLarge) 8.dp else 6.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Icon Badge
@@ -509,7 +575,7 @@ fun QuickActionButton(
                 )
             }
 
-            Spacer(modifier = Modifier.width(if (isLarge) 10.dp else 8.dp))
+            Spacer(modifier = Modifier.width(10.dp))
 
             Column(
                 modifier = Modifier.weight(1f),
@@ -518,16 +584,16 @@ fun QuickActionButton(
                 Text(
                     text = title,
                     color = titleColor,
-                    fontSize = titleSize,
-                    fontWeight = FontWeight.ExtraBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2,
+                    lineHeight = 16.sp
                 )
-                Spacer(modifier = Modifier.height(1.dp))
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = subtitle,
                     color = subtitleColor,
-                    fontSize = subtitleSize,
+                    style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis

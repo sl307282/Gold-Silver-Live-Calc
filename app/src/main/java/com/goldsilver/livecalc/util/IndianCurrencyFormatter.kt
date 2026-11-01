@@ -64,6 +64,15 @@ object IndianCurrencyFormatter {
     }
 
     /**
+     * Formats an amount with the ₹ currency symbol and exact Indian digit grouping (Locale("en", "IN")).
+     * e.g., 137776.5 -> "₹1,37,776.50"
+     * e.g., 13777.65 -> "₹13,777.65"
+     */
+    fun formatCurrencyINR(amount: Double, decimalPlaces: Int = 2): String {
+        return "₹" + formatAmount(amount, decimalPlaces)
+    }
+
+    /**
      * Formats user input dynamically in real-time as they type into a TextField.
      * Preserves single decimal points and trailing dots during typing.
      * e.g., "1000" -> "1,000"

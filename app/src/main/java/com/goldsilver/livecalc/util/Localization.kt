@@ -52,6 +52,11 @@ data class AppStrings(
     val priceAlertsBannerSubtitle: String,
     val setAlert: String,
     val lastUpdated: String,
+    val showBreakdown: String = "Show breakdown ⌄",
+    val showLess: String = "Show less ⌃",
+    val vsYesterday: String = "vs yesterday",
+    val sectionPurity: String = "PURITY",
+    val sectionWeight: String = "WEIGHT",
 
     // Historical Trends & Charts
     val historicalTrends: String,

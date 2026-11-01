@@ -1,4 +1,36 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Gold Silver Live Calc</string>
+
+    <!-- Home Page Labels & Titles -->
+    <string name="gold_xau">Gold (XAU)</string>
+    <string name="silver_xag">Silver (XAG)</string>
+    <string name="section_purity">PURITY</string>
+    <string name="section_weight">WEIGHT</string>
+    <string name="show_breakdown">Show breakdown ⌄</string>
+    <string name="show_less">Show less ⌃</string>
+    <string name="vs_yesterday">vs yesterday</string>
+
+    <!-- Weights -->
+    <string name="weight_1g">1 g</string>
+    <string name="weight_10g">10 g</string>
+    <string name="weight_1tola">1 tola (11.66 g)</string>
+    <string name="weight_1kg">1 kg</string>
+
+    <!-- Purities -->
+    <string name="purity_gold_24k">24K (99.9%)</string>
+    <string name="purity_gold_22k">22K (91.6%)</string>
+    <string name="purity_gold_18k">18K (75.0%)</string>
+    <string name="purity_gold_14k">14K (58.3%)</string>
+    <string name="purity_silver_999">999</string>
+    <string name="purity_silver_925">925 (Sterling)</string>
+
+    <!-- Quick Calculator Tiles -->
+    <string name="title_gold_calc">Gold Calculator</string>
+    <string name="title_silver_calc">Silver Calculator</string>
+    <string name="title_hallmark">Hallmark</string>
+    <string name="title_alerts">Alerts</string>
+    <string name="subtitle_calc_price">Calculate price</string>
+    <string name="subtitle_verify_purity">Verify purity</string>
+    <string name="subtitle_price_alerts">Price alerts</string>
 </resources>

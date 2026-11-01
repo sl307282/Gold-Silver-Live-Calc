@@ -30,11 +30,18 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.foundation.ExperimentalFoundationApi
+import kotlinx.coroutines.delay
 import com.goldsilver.livecalc.ui.theme.*
 import com.goldsilver.livecalc.ui.viewmodel.GoldSilverViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun SilverCalculatorScreen(
     viewModel: GoldSilverViewModel,
@@ -45,7 +52,11 @@ fun SilverCalculatorScreen(
     val latestRate by viewModel.latestRate.collectAsStateWithLifecycle()
     val currency by viewModel.currency.collectAsStateWithLifecycle()
     val focusManager = LocalFocusManager.current
-    val listState = rememberLazyListState()
+    val scrollState = rememberScrollState()
+    val rateRequester = remember { BringIntoViewRequester() }
+    val weightRequester = remember { BringIntoViewRequester() }
+    val makingRequester = remember { BringIntoViewRequester() }
+    val gstRequester = remember { BringIntoViewRequester() }
     val coroutineScope = rememberCoroutineScope()
 
     // Input states
@@ -145,99 +156,99 @@ fun SilverCalculatorScreen(
             )
         },
         containerColor = DarkBackground,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         modifier = modifier
     ) { innerPadding ->
-        LazyColumn(
-            state = listState,
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
-                .padding(horizontal = 16.dp),
+                .padding(top = innerPadding.calculateTopPadding())
+                .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
+                .verticalScroll(scrollState)
+                .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
 
             // ── 1. Purity (Silver) Selector at TOP OF PAGE (Optimum Compact) ──
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = DarkSurface),
-                    shape = RoundedCornerShape(12.dp),
-                    elevation = CardDefaults.cardElevation(1.dp)
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                shape = RoundedCornerShape(12.dp),
+                elevation = CardDefaults.cardElevation(1.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
                 ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                    Text(
+                        text = "Purity (Silver)",
+                        color = TextSecondary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Text(
-                            text = "Purity (Silver)",
-                            color = TextSecondary,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            listOf("999" to "999\n(Fine)", "925" to "925\n(Sterling)", "900" to "900\n(Coin)").forEach { (purity, label) ->
-                                val isSelected = selectedPurity == purity
-                                val bgColor by animateColorAsState(
-                                    targetValue = if (isSelected) {
-                                        SilverPrimary
-                                    } else {
-                                        if (isSystemDarkThemeGlobal) Color(0xFF1C1E2A) else Color(0xFFE5E7EB)
-                                    },
-                                    animationSpec = tween(200),
-                                    label = "silverPurityBg"
-                                )
-                                val textColor by animateColorAsState(
-                                    targetValue = if (isSelected) {
-                                        Color(0xFF0D0E15)
-                                    } else {
-                                        if (isSystemDarkThemeGlobal) Color(0xFF7E8299) else Color(0xFF6B7280)
-                                    },
-                                    animationSpec = tween(200),
-                                    label = "silverPurityText"
-                                )
-                                val borderColor by animateColorAsState(
-                                    targetValue = if (isSelected) {
-                                        SilverPrimary
-                                    } else {
-                                        if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.08f)
-                                    },
-                                    animationSpec = tween(200),
-                                    label = "silverPurityBorder"
-                                )
+                        listOf("999" to "999\n(Fine)", "925" to "925\n(Sterling)", "900" to "900\n(Coin)").forEach { (purity, label) ->
+                            val isSelected = selectedPurity == purity
+                            val bgColor by animateColorAsState(
+                                targetValue = if (isSelected) {
+                                    SilverPrimary
+                                } else {
+                                    if (isSystemDarkThemeGlobal) Color(0xFF1C1E2A) else Color(0xFFE5E7EB)
+                                },
+                                animationSpec = tween(200),
+                                label = "silverPurityBg"
+                            )
+                            val textColor by animateColorAsState(
+                                targetValue = if (isSelected) {
+                                    Color(0xFF0D0E15)
+                                } else {
+                                    if (isSystemDarkThemeGlobal) Color(0xFF7E8299) else Color(0xFF6B7280)
+                                },
+                                animationSpec = tween(200),
+                                label = "silverPurityText"
+                            )
+                            val borderColor by animateColorAsState(
+                                targetValue = if (isSelected) {
+                                    SilverPrimary
+                                } else {
+                                    if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.08f)
+                                },
+                                animationSpec = tween(200),
+                                label = "silverPurityBorder"
+                            )
 
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(38.dp)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(bgColor)
-                                        .border(
-                                            width = if (isSelected) 1.5.dp else 1.dp,
-                                            color = borderColor,
-                                            shape = RoundedCornerShape(8.dp)
-                                        )
-                                        .clickable {
-                                            selectedPurity = purity
-                                            isEditingRate = false
-                                            focusManager.clearFocus()
-                                            customRateInput = com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(
-                                                when (purity) { "999" -> price999; "925" -> price925; else -> price900 }
-                                            )
-                                        },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = label,
-                                        color = textColor,
-                                        fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.SemiBold,
-                                        fontSize = 11.sp,
-                                        textAlign = TextAlign.Center,
-                                        lineHeight = 13.sp
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(38.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(bgColor)
+                                    .border(
+                                        width = if (isSelected) 1.5.dp else 1.dp,
+                                        color = borderColor,
+                                        shape = RoundedCornerShape(8.dp)
                                     )
-                                }
+                                    .clickable {
+                                        selectedPurity = purity
+                                        isEditingRate = false
+                                        focusManager.clearFocus()
+                                        customRateInput = com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(
+                                            when (purity) { "999" -> price999; "925" -> price925; else -> price900 }
+                                        )
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = label,
+                                    color = textColor,
+                                    fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.SemiBold,
+                                    fontSize = 11.sp,
+                                    textAlign = TextAlign.Center,
+                                    lineHeight = 13.sp
+                                )
                             }
                         }
                     }
@@ -245,30 +256,41 @@ fun SilverCalculatorScreen(
             }
 
             // ── 2. Live Rate Card (Below Purity) ───────────────────────────
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = DarkSurface),
-                    shape = RoundedCornerShape(14.dp),
-                    elevation = CardDefaults.cardElevation(2.dp)
-                ) {
-                    if (isEditingRate) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            OutlinedTextField(
-                                value = customRateInput,
-                                onValueChange = { customRateInput = com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatInput(it) },
-                                label = { Text("Rate ($currency/Gram)") },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = SilverPrimary, focusedLabelColor = SilverPrimary,
-                                    unfocusedBorderColor = Color.Gray, focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary
-                                ),
-                                modifier = Modifier.weight(1f), singleLine = true
-                            )
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                shape = RoundedCornerShape(14.dp),
+                elevation = CardDefaults.cardElevation(2.dp)
+            ) {
+                if (isEditingRate) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = customRateInput,
+                            onValueChange = { customRateInput = com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatInput(it) },
+                            label = { Text("Rate ($currency/Gram)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = SilverPrimary, focusedLabelColor = SilverPrimary,
+                                unfocusedBorderColor = Color.Gray, focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .bringIntoViewRequester(rateRequester)
+                                .onFocusChanged {
+                                    if (it.isFocused) {
+                                        coroutineScope.launch {
+                                            rateRequester.bringIntoView()
+                                            delay(200)
+                                            rateRequester.bringIntoView()
+                                        }
+                                    }
+                                },
+                            singleLine = true
+                        )
                             IconButton(onClick = {
                                 isEditingRate = false; focusManager.clearFocus()
                                 if (com.goldsilver.livecalc.util.IndianCurrencyFormatter.parseAmount(customRateInput) <= 0.0)
@@ -327,139 +349,170 @@ fun SilverCalculatorScreen(
                         }
                     }
                 }
-            }
 
             // ── 3. Input Fields (Below Live Rate: Weight, Unit, Making Charge, GST) ──
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = DarkSurface),
-                    shape = RoundedCornerShape(14.dp),
-                    elevation = CardDefaults.cardElevation(2.dp)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                shape = RoundedCornerShape(14.dp),
+                elevation = CardDefaults.cardElevation(2.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
 
 
-                        // ── 2. Weight + Unit row ────────────────────────────
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            OutlinedTextField(
-                                value = weightInput,
-                                onValueChange = { newValue -> 
-                                    if (newValue.length <= 10 && newValue.count { it == '.' } <= 1) {
-                                        weightInput = newValue 
-                                    }
-                                },
-                                label = { Text("Weight") },
-                                placeholder = { Text("Enter weight", color = TextSecondary.copy(alpha = 0.5f)) },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = SilverPrimary, focusedLabelColor = SilverPrimary,
-                                    unfocusedBorderColor = Color.Gray, focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary
-                                ),
-                                shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier.weight(1.5f).height(58.dp),
-                                singleLine = true
-                            )
-                            Box(modifier = Modifier.weight(1f).height(58.dp)) {
-                                OutlinedTextField(
-                                    value = selectedUnit,
-                                    onValueChange = {},
-                                    readOnly = true,
-                                    label = { Text("Unit") },
-                                    trailingIcon = { Text("▼", color = TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(end = 4.dp)) },
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        unfocusedBorderColor = Color.Gray, focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary
-                                    ),
-                                    shape = RoundedCornerShape(14.dp),
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                                Box(modifier = Modifier.matchParentSize().clickable { unitDropdownExpanded = true })
-                                DropdownMenu(expanded = unitDropdownExpanded, onDismissRequest = { unitDropdownExpanded = false }) {
-                                    listOf("Gram" to "Gram (g) ⭐", "Kilogram" to "Kilogram (kg)", "Tola" to "Tola (11.6638 g)", "Ounce" to "Ounce (oz)", "Milligram" to "Milligram (mg)")
-                                        .forEach { (key, label) ->
-                                            DropdownMenuItem(text = { Text(label) }, onClick = { selectedUnit = key; unitDropdownExpanded = false })
-                                        }
+                    // ── 2. Weight + Unit row ────────────────────────────
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        OutlinedTextField(
+                            value = weightInput,
+                            onValueChange = { newValue -> 
+                                if (newValue.length <= 10 && newValue.count { it == '.' } <= 1) {
+                                    weightInput = newValue 
                                 }
-                            }
-                        }
-
-                        // ── 4. Making Charge ───────────────────────────────
-                        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            OutlinedTextField(
-                                value = makingChargeInput,
-                                onValueChange = { newValue ->
-                                    if (newValue.length <= 12 && newValue.count { it == '.' } <= 1) {
-                                        if (isPercentageCharge) {
-                                            val num = newValue.toDoubleOrNull()
-                                            if (newValue.isEmpty() || (num != null && num <= 100.0)) makingChargeInput = newValue
-                                        } else {
-                                            makingChargeInput = com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatInput(newValue)
+                            },
+                            label = { Text("Weight") },
+                            placeholder = { Text("Enter weight", color = TextSecondary.copy(alpha = 0.5f)) },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = SilverPrimary, focusedLabelColor = SilverPrimary,
+                                unfocusedBorderColor = Color.Gray, focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary
+                            ),
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier
+                                .weight(1.5f)
+                                .height(58.dp)
+                                .bringIntoViewRequester(weightRequester)
+                                .onFocusChanged {
+                                    if (it.isFocused) {
+                                        coroutineScope.launch {
+                                            weightRequester.bringIntoView()
+                                            delay(200)
+                                            weightRequester.bringIntoView()
                                         }
                                     }
                                 },
-                                label = { Text(if (isPercentageCharge) "Making Charge (%)" else "Making Charge ($currency)", fontSize = 11.sp) },
-                                placeholder = { Text("0", color = TextSecondary.copy(alpha = 0.4f)) },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            singleLine = true
+                        )
+                        Box(modifier = Modifier.weight(1f).height(58.dp)) {
+                            OutlinedTextField(
+                                value = selectedUnit,
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text("Unit") },
+                                trailingIcon = { Text("▼", color = TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(end = 4.dp)) },
                                 colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = SilverPrimary, focusedLabelColor = SilverPrimary,
                                     unfocusedBorderColor = Color.Gray, focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary
                                 ),
                                 shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier.weight(1.4f),
-                                singleLine = true
+                                modifier = Modifier.fillMaxSize()
                             )
-                            Column(modifier = Modifier.weight(1f).padding(bottom = 4.dp)) {
-                                Text("Charge Type", color = TextSecondary, fontSize = 11.sp)
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(50.dp)
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .border(1.dp, Color.Gray.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
-                                        .background(Color.White.copy(alpha = 0.04f))
-                                ) {
-                                    Box(
-                                        modifier = Modifier.weight(1f).fillMaxHeight()
-                                            .clip(RoundedCornerShape(topStart = 10.dp, bottomStart = 10.dp))
-                                            .background(if (isPercentageCharge) SilverPrimary else Color.Transparent)
-                                            .clickable { isPercentageCharge = true },
-                                        contentAlignment = Alignment.Center
-                                    ) { Text("%", color = if (isPercentageCharge) DarkBackground else TextPrimary, fontWeight = FontWeight.Bold, fontSize = 15.sp) }
-                                    Box(
-                                        modifier = Modifier.weight(1f).fillMaxHeight()
-                                            .clip(RoundedCornerShape(topEnd = 10.dp, bottomEnd = 10.dp))
-                                            .background(if (!isPercentageCharge) SilverPrimary else Color.Transparent)
-                                            .clickable { isPercentageCharge = false },
-                                        contentAlignment = Alignment.Center
-                                    ) { Text(currencySymbol, color = if (!isPercentageCharge) DarkBackground else TextPrimary, fontWeight = FontWeight.Bold, fontSize = 15.sp) }
-                                }
+                            Box(modifier = Modifier.matchParentSize().clickable { unitDropdownExpanded = true })
+                            DropdownMenu(expanded = unitDropdownExpanded, onDismissRequest = { unitDropdownExpanded = false }) {
+                                listOf("Gram" to "Gram (g) ⭐", "Kilogram" to "Kilogram (kg)", "Tola" to "Tola (11.6638 g)", "Ounce" to "Ounce (oz)", "Milligram" to "Milligram (mg)")
+                                    .forEach { (key, label) ->
+                                        DropdownMenuItem(text = { Text(label) }, onClick = { selectedUnit = key; unitDropdownExpanded = false })
+                                    }
                             }
                         }
+                    }
 
-                        // ── 5. GST ─────────────────────────────────────────
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedTextField(
-                                value = gstInput,
-                                onValueChange = { newValue ->
-                                    if (newValue.length <= 6 && newValue.count { it == '.' } <= 1) {
+                    // ── 4. Making Charge ───────────────────────────────
+                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        OutlinedTextField(
+                            value = makingChargeInput,
+                            onValueChange = { newValue ->
+                                if (newValue.length <= 12 && newValue.count { it == '.' } <= 1) {
+                                    if (isPercentageCharge) {
                                         val num = newValue.toDoubleOrNull()
-                                        if (newValue.isEmpty() || (num != null && num <= 50.0)) gstInput = newValue
+                                        if (newValue.isEmpty() || (num != null && num <= 100.0)) makingChargeInput = newValue
+                                    } else {
+                                        makingChargeInput = com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatInput(newValue)
+                                    }
+                                }
+                            },
+                            label = { Text(if (isPercentageCharge) "Making Charge (%)" else "Making Charge ($currency)", fontSize = 11.sp) },
+                            placeholder = { Text("0", color = TextSecondary.copy(alpha = 0.4f)) },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = SilverPrimary, focusedLabelColor = SilverPrimary,
+                                unfocusedBorderColor = Color.Gray, focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary
+                            ),
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier
+                                .weight(1.4f)
+                                .bringIntoViewRequester(makingRequester)
+                                .onFocusChanged {
+                                    if (it.isFocused) {
+                                        coroutineScope.launch {
+                                            makingRequester.bringIntoView()
+                                            delay(200)
+                                            makingRequester.bringIntoView()
+                                        }
                                     }
                                 },
-                                label = { Text("GST (%)") },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = SilverPrimary, focusedLabelColor = SilverPrimary,
-                                    unfocusedBorderColor = Color.Gray, focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary
-                                ),
-                                shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier.weight(1f),
-                                singleLine = true
-                            )
-                            IconButton(onClick = { showGstInfo = true }) {
-                                Icon(Icons.Default.Info, contentDescription = "GST Info", tint = TextSecondary, modifier = Modifier.size(20.dp))
+                            singleLine = true
+                        )
+                        Column(modifier = Modifier.weight(1f).padding(bottom = 4.dp)) {
+                            Text("Charge Type", color = TextSecondary, fontSize = 11.sp)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(50.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .border(1.dp, Color.Gray.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+                                    .background(Color.White.copy(alpha = 0.04f))
+                            ) {
+                                Box(
+                                    modifier = Modifier.weight(1f).fillMaxHeight()
+                                        .clip(RoundedCornerShape(topStart = 10.dp, bottomStart = 10.dp))
+                                        .background(if (isPercentageCharge) SilverPrimary else Color.Transparent)
+                                        .clickable { isPercentageCharge = true },
+                                    contentAlignment = Alignment.Center
+                                ) { Text("%", color = if (isPercentageCharge) DarkBackground else TextPrimary, fontWeight = FontWeight.Bold, fontSize = 15.sp) }
+                                Box(
+                                    modifier = Modifier.weight(1f).fillMaxHeight()
+                                        .clip(RoundedCornerShape(topEnd = 10.dp, bottomEnd = 10.dp))
+                                        .background(if (!isPercentageCharge) SilverPrimary else Color.Transparent)
+                                        .clickable { isPercentageCharge = false },
+                                    contentAlignment = Alignment.Center
+                                ) { Text(currencySymbol, color = if (!isPercentageCharge) DarkBackground else TextPrimary, fontWeight = FontWeight.Bold, fontSize = 15.sp) }
                             }
+                        }
+                    }
+
+                    // ── 5. GST ─────────────────────────────────────────
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = gstInput,
+                            onValueChange = { newValue ->
+                                if (newValue.length <= 6 && newValue.count { it == '.' } <= 1) {
+                                    val num = newValue.toDoubleOrNull()
+                                    if (newValue.isEmpty() || (num != null && num <= 50.0)) gstInput = newValue
+                                }
+                            },
+                            label = { Text("GST (%)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = SilverPrimary, focusedLabelColor = SilverPrimary,
+                                unfocusedBorderColor = Color.Gray, focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary
+                            ),
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .bringIntoViewRequester(gstRequester)
+                                .onFocusChanged {
+                                    if (it.isFocused) {
+                                        coroutineScope.launch {
+                                            gstRequester.bringIntoView()
+                                            delay(200)
+                                            gstRequester.bringIntoView()
+                                        }
+                                    }
+                                },
+                            singleLine = true
+                        )
+                        IconButton(onClick = { showGstInfo = true }) {
+                            Icon(Icons.Default.Info, contentDescription = "GST Info", tint = TextSecondary, modifier = Modifier.size(20.dp))
                         }
                     }
                 }
@@ -467,25 +520,22 @@ fun SilverCalculatorScreen(
 
             // ── 6. Estimated Breakdown ─────────────────────────────────────
             if (hasCalculated) {
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth().border(1.dp, SilverPrimary.copy(alpha = 0.25f), RoundedCornerShape(14.dp)),
-                        colors = CardDefaults.cardColors(containerColor = DarkSurface),
-                        shape = RoundedCornerShape(14.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                            Text(strings.priceBreakdown.uppercase(), color = SilverPrimary, fontWeight = FontWeight.Bold, fontSize = 12.sp, letterSpacing = 1.sp)
-                            HorizontalDivider(color = SilverPrimary.copy(alpha = 0.15f))
-                            BreakdownRow(icon = "🪙", label = strings.baseMetalPrice, value = "${formatIndianStyle(calculatedValues.baseGoldValue)} $currency")
-                            BreakdownRow(icon = "🛠", label = strings.totalMakingCharges, value = "${formatIndianStyle(calculatedValues.makingCharges)} $currency")
-                            BreakdownRow(icon = "🧾", label = strings.gstAmount, value = "${formatIndianStyle(calculatedValues.gstAmount)} $currency")
-                        }
+                Card(
+                    modifier = Modifier.fillMaxWidth().border(1.dp, SilverPrimary.copy(alpha = 0.25f), RoundedCornerShape(14.dp)),
+                    colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        Text(strings.priceBreakdown.uppercase(), color = SilverPrimary, fontWeight = FontWeight.Bold, fontSize = 12.sp, letterSpacing = 1.sp)
+                        HorizontalDivider(color = SilverPrimary.copy(alpha = 0.15f))
+                        BreakdownRow(icon = "🪙", label = strings.baseMetalPrice, value = "${formatIndianStyle(calculatedValues.baseGoldValue)} $currency")
+                        BreakdownRow(icon = "🛠", label = strings.totalMakingCharges, value = "${formatIndianStyle(calculatedValues.makingCharges)} $currency")
+                        BreakdownRow(icon = "🧾", label = strings.gstAmount, value = "${formatIndianStyle(calculatedValues.gstAmount)} $currency")
                     }
                 }
 
                 // ── 7. Final Total Highlighted Card (Light Theme) ─────────
-                item {
-                    Card(
+                Card(
                         modifier = Modifier
                             .fillMaxWidth()
                             .border(
@@ -563,43 +613,43 @@ fun SilverCalculatorScreen(
                         }
                     }
                 }
-            }
 
             // ── 8. Action Buttons ──────────────────────────────────────────
-            item {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedButton(
-                        onClick = {
-                            weightInput = ""; makingChargeInput = ""; gstInput = "3"
-                            selectedPurity = "999"; isPercentageCharge = true; hasCalculated = false
-                            customRateInput = com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(price999)
-                            focusManager.clearFocus()
-                        },
-                        modifier = Modifier.weight(1f).height(52.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, SilverPrimary)
-                    ) {
-                        Text(strings.reset, color = SilverPrimary, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                    }
-                    Button(
-                        onClick = {
-                            focusManager.clearFocus()
-                            hasCalculated = true
-                            coroutineScope.launch {
-                                kotlinx.coroutines.delay(100)
-                                listState.animateScrollToItem(index = listState.layoutInfo.totalItemsCount - 1)
-                            }
-                        },
-                        modifier = Modifier.weight(1.6f).height(52.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = SilverPrimary)
-                    ) {
-                        Text(strings.calculate, color = DarkBackground, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                    }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedButton(
+                    onClick = {
+                        weightInput = ""; makingChargeInput = ""; gstInput = "3"
+                        selectedPurity = "999"; isPercentageCharge = true; hasCalculated = false
+                        customRateInput = com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(price999)
+                        focusManager.clearFocus()
+                        coroutineScope.launch {
+                            scrollState.animateScrollTo(0)
+                        }
+                    },
+                    modifier = Modifier.weight(1f).height(52.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, SilverPrimary)
+                ) {
+                    Text(strings.reset, color = SilverPrimary, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                }
+                Button(
+                    onClick = {
+                        focusManager.clearFocus()
+                        hasCalculated = true
+                        coroutineScope.launch {
+                            kotlinx.coroutines.delay(100)
+                            scrollState.animateScrollTo(scrollState.maxValue)
+                        }
+                    },
+                    modifier = Modifier.weight(1.6f).height(52.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = SilverPrimary)
+                ) {
+                    Text(strings.calculate, color = DarkBackground, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                 }
             }
 
-            item { Spacer(modifier = Modifier.height(48.dp)) }
+            Spacer(modifier = Modifier.height(32.dp))
         }
     }
 }

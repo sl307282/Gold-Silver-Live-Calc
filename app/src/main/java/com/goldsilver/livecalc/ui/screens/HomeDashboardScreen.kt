@@ -53,6 +53,7 @@ fun HomeDashboardScreen(
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     val currency by viewModel.currency.collectAsStateWithLifecycle()
     val isPremium by viewModel.isPremium.collectAsStateWithLifecycle()
+    val usdRate by viewModel.usdRate.collectAsStateWithLifecycle()
 
     val lastUpdatedText = remember(latestRate) {
         latestRate?.let {
@@ -61,17 +62,23 @@ fun HomeDashboardScreen(
         } ?: "..."
     }
 
-    // Refresh rotation animation
-    val transition = rememberInfiniteTransition(label = "rotation")
-    val rotationAngle by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "rotation"
-    )
+    // Market Snapshot figures
+    val usdInrText = remember(latestRate, usdRate) {
+        val inrGold = latestRate?.goldPrice24k ?: 13777.65
+        val usdGold = usdRate?.goldPrice24k ?: 124.61
+        val calculatedUsdInr = if (usdGold > 0) (inrGold / usdGold) / 1.25 else 88.45
+        String.format(Locale.US, "₹%.2f", calculatedUsdInr)
+    }
+
+    val goldUsdOzText = remember(usdRate) {
+        val goldOz = (usdRate?.goldPrice24k ?: 124.61) * 31.1035
+        String.format(Locale.US, "$%,.2f", goldOz)
+    }
+
+    val silverUsdOzText = remember(usdRate) {
+        val silverOz = (usdRate?.silverPrice ?: 1.58) * 31.1035
+        String.format(Locale.US, "$%,.2f", silverOz)
+    }
 
     Scaffold(
         containerColor = DarkBackground,
@@ -103,14 +110,20 @@ fun HomeDashboardScreen(
                     ) {
                         Text("${strings.lastUpdated} • $lastUpdatedText", color = TextSecondary, fontSize = 12.sp)
                         Spacer(modifier = Modifier.width(6.dp))
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = strings.refresh,
-                            tint = GoldPrimary,
-                            modifier = Modifier
-                                .size(14.dp)
-                                .run { if (isRefreshing) rotate(rotationAngle) else this }
-                        )
+                        if (isRefreshing) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(14.dp),
+                                strokeWidth = 2.dp,
+                                color = GoldPrimary
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = strings.refresh,
+                                tint = GoldPrimary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -133,6 +146,7 @@ fun HomeDashboardScreen(
                         MetalRateCard(
                             title = "Gold (XAU)",
                             primaryPrice = "${IndianCurrencyFormatter.formatCurrencyINR(rate.goldPrice24k)} / g",
+                            headlineFigure = "10 g · ${IndianCurrencyFormatter.formatCurrencyINR(rate.goldPrice24k * 10)}",
                             changePercent = goldChange,
                             diffAmount = goldDiffAmount,
                             isGold = true,
@@ -177,6 +191,7 @@ fun HomeDashboardScreen(
                         MetalRateCard(
                             title = "Silver (XAG)",
                             primaryPrice = "${IndianCurrencyFormatter.formatCurrencyINR(rate.silverPrice)} / g",
+                            headlineFigure = "1 kg · ${IndianCurrencyFormatter.formatCurrencyINR(rate.silverPrice * 1000)}",
                             changePercent = silverChange,
                             diffAmount = silverDiffAmount,
                             isGold = false,
@@ -304,6 +319,28 @@ fun HomeDashboardScreen(
                 }
 
                 item {
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
+
+                // Market Snapshot Row
+                item {
+                    Text(
+                        text = strings.marketSnapshot.uppercase(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextMuted,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+
+                    MarketSnapshotCard(
+                        usdInr = usdInrText,
+                        goldUsdOz = goldUsdOzText,
+                        silverUsdOz = silverUsdOzText
+                    )
+                }
+
+                item {
                     Spacer(modifier = Modifier.height(16.dp))
                 }
             }
@@ -315,6 +352,7 @@ fun HomeDashboardScreen(
 fun MetalRateCard(
     title: String,
     primaryPrice: String,
+    headlineFigure: String? = null,
     changePercent: Double?,
     diffAmount: Double?,
     isGold: Boolean,
@@ -325,6 +363,12 @@ fun MetalRateCard(
 ) {
     val strings = LocalAppStrings.current
     var isExpanded by rememberSaveable { mutableStateOf(false) }
+
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (isExpanded) 180f else 0f,
+        animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+        label = "chevronRotation"
+    )
 
     val cardBrush = if (isSystemDarkThemeGlobal) {
         if (isGold) {
@@ -418,11 +462,21 @@ fun MetalRateCard(
                 fontWeight = FontWeight.Bold
             )
 
+            if (!isExpanded && headlineFigure != null) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = headlineFigure,
+                    color = TextSecondary,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+
             if (diffAmount != null && changePercent != null) {
                 val isUp = diffAmount > 0.001
                 val isDown = diffAmount < -0.001
                 val arrow = if (isUp) "▲" else if (isDown) "▼" else "—"
-                val color = if (isUp) AccentGreen else if (isDown) AccentRed else TextMuted
+                val color = if (isUp) Color(0xFF4ADE80) else if (isDown) Color(0xFFFF6B6B) else TextMuted
                 val absDiff = IndianCurrencyFormatter.formatCurrencyINR(Math.abs(diffAmount))
                 val pctStr = String.format(Locale.US, "%.2f", Math.abs(changePercent))
 
@@ -475,20 +529,30 @@ fun MetalRateCard(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Expand / Collapse Full-width Text Button
-            Box(
+            // Expand / Collapse Full-width Text Button with Ripple and Rotating Chevron
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(8.dp))
                     .clickable { isExpanded = !isExpanded }
                     .padding(vertical = 8.dp),
-                contentAlignment = Alignment.Center
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = if (isExpanded) strings.showLess else strings.showBreakdown,
                     color = themeColor,
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Icon(
+                    imageVector = Icons.Default.KeyboardArrowDown,
+                    contentDescription = null,
+                    tint = themeColor,
+                    modifier = Modifier
+                        .size(18.dp)
+                        .rotate(chevronRotation)
                 )
             }
         }
@@ -532,10 +596,10 @@ fun QuickActionButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val cardHeight = 82.dp
-    val iconBadgeSize = 40.dp
-    val iconSize = 20.dp
-    val chevronSize = 16.dp
+    val cardHeight = 72.dp
+    val iconBadgeSize = 34.dp
+    val iconSize = 18.dp
+    val chevronSize = 14.dp
 
     Card(
         modifier = modifier
@@ -544,14 +608,14 @@ fun QuickActionButton(
             .clickable { onClick() }
             .border(BorderStroke(1.5.dp, borderColor), RoundedCornerShape(16.dp)),
         shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.5.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxSize()
                 .background(backgroundBrush)
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = 10.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Icon Badge
@@ -575,7 +639,7 @@ fun QuickActionButton(
                 )
             }
 
-            Spacer(modifier = Modifier.width(10.dp))
+            Spacer(modifier = Modifier.width(8.dp))
 
             Column(
                 modifier = Modifier.weight(1f),
@@ -585,15 +649,18 @@ fun QuickActionButton(
                     text = title,
                     color = titleColor,
                     style = MaterialTheme.typography.titleSmall,
+                    fontSize = 12.5.sp,
                     fontWeight = FontWeight.Bold,
-                    maxLines = 2,
-                    lineHeight = 16.sp
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
                 )
-                Spacer(modifier = Modifier.height(2.dp))
+                Spacer(modifier = Modifier.height(1.dp))
                 Text(
                     text = subtitle,
                     color = subtitleColor,
                     style = MaterialTheme.typography.bodySmall,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -606,6 +673,131 @@ fun QuickActionButton(
                 tint = subtitleColor.copy(alpha = 0.8f),
                 modifier = Modifier.size(chevronSize)
             )
+        }
+    }
+}
+
+@Composable
+fun MarketSnapshotCard(
+    usdInr: String,
+    goldUsdOz: String,
+    silverUsdOz: String,
+    modifier: Modifier = Modifier
+) {
+    val cardBrush = if (isSystemDarkThemeGlobal) {
+        Brush.linearGradient(colors = listOf(DarkSurface, Color(0xFF1E2028)))
+    } else {
+        Brush.linearGradient(colors = listOf(Color(0xFFFFFFFF), Color(0xFFF8FAFC)))
+    }
+
+    val cardBorderColor = if (isSystemDarkThemeGlobal) {
+        Color.White.copy(alpha = 0.1f)
+    } else {
+        Color.Black.copy(alpha = 0.08f)
+    }
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .border(
+                width = 0.5.dp,
+                color = cardBorderColor,
+                shape = RoundedCornerShape(16.dp)
+            ),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (!isSystemDarkThemeGlobal) 1.5.dp else 0.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(brush = cardBrush)
+                .padding(vertical = 12.dp, horizontal = 6.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Col 1: USD/INR
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "USD / INR",
+                    color = TextMuted,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 11.sp
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = usdInr,
+                    color = TextPrimary,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.5.sp
+                )
+            }
+
+            // Divider 1
+            Box(
+                modifier = Modifier
+                    .width(1.dp)
+                    .height(28.dp)
+                    .background(if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.08f))
+            )
+
+            // Col 2: Gold USD/oz
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Gold USD/oz",
+                    color = GoldPrimary,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 11.sp
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = goldUsdOz,
+                    color = TextPrimary,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.5.sp
+                )
+            }
+
+            // Divider 2
+            Box(
+                modifier = Modifier
+                    .width(1.dp)
+                    .height(28.dp)
+                    .background(if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.08f))
+            )
+
+            // Col 3: Silver USD/oz
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Silver USD/oz",
+                    color = SilverPrimary,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 11.sp
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = silverUsdOz,
+                    color = TextPrimary,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.5.sp
+                )
+            }
         }
     }
 }

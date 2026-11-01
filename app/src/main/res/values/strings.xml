@@ -7,9 +7,10 @@
     <string name="silver_xag">Silver (XAG)</string>
     <string name="section_purity">PURITY</string>
     <string name="section_weight">WEIGHT</string>
-    <string name="show_breakdown">Show breakdown ⌄</string>
-    <string name="show_less">Show less ⌃</string>
+    <string name="show_breakdown">Show breakdown</string>
+    <string name="show_less">Show less</string>
     <string name="vs_yesterday">vs yesterday</string>
+    <string name="market_snapshot">Market Snapshot</string>
 
     <!-- Weights -->
     <string name="weight_1g">1 g</string>

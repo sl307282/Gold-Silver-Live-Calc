@@ -323,12 +323,6 @@ class MetalRepository(
     suspend fun fetchRates(currency: String): Result<RateEntity> = withContext(Dispatchers.IO) {
         try {
             apiError.value = null
-            
-            // Check if currency changed, clear table to prevent mixed currency chart data
-            val latestCached = rateDao.getLatestRate()
-            if (latestCached != null && latestCached.currency != currency) {
-                rateDao.deleteAllRates()
-            }
 
             val dbUrl = firebaseDatabaseUrl.trim()
             if (dbUrl.isBlank()) {
@@ -390,10 +384,29 @@ class MetalRepository(
                 e.printStackTrace()
             }
 
+            // Sync USD snapshot rates for Market Snapshot if not current currency
+            if (!currency.equals("USD", ignoreCase = true) && !isFirestore && dbUrl.isNotBlank()) {
+                try {
+                    val normalizedUrl = if (dbUrl.endsWith("/")) dbUrl else "$dbUrl/"
+                    val usdFetchUrl = "${normalizedUrl}rates/USD.json"
+                    val usdReq = okhttp3.Request.Builder().url(usdFetchUrl).build()
+                    okHttpClient.newCall(usdReq).execute().use { usdResp ->
+                        if (usdResp.isSuccessful) {
+                            val usdBody = usdResp.body?.string()
+                            if (!usdBody.isNullOrBlank() && usdBody != "null") {
+                                val usdParsed = json.decodeFromString<RateEntity>(usdBody).copy(id = 0)
+                                saveOrUpdateTodayRate(usdParsed)
+                            }
+                        }
+                    }
+                } catch (ignored: Exception) {}
+            }
+
             // Save or update today's record
             val rateToSave = parsedRate.copy(id = 0)
             saveOrUpdateTodayRate(rateToSave)
             checkAndTriggerAlerts(rateToSave)
+
             Result.success(rateToSave)
         } catch (e: Exception) {
             e.printStackTrace()

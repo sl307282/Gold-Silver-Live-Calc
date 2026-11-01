@@ -83,6 +83,10 @@ class GoldSilverViewModel(application: Application) : AndroidViewModel(applicati
         repository.getHistoricalRatesForCurrencyFlow(curr)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // USD Benchmark Rates for Market Snapshot
+    val usdRate: StateFlow<RateEntity?> = repository.getLatestRateForCurrencyFlow("USD")
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
     // Previous Trading Day Reference Rate (strictly prior to current displayed rate's date)
     val previousTradingDayRate: StateFlow<RateEntity?> = combine(latestRate, historicalRates) { latest, history ->
         findPreviousTradingDayRate(latest, history)

@@ -51,10 +51,10 @@ val DarkSurfaceElevated: Color
     }
 
 val AccentGreen: Color
-    get() = if (isSystemDarkThemeGlobal) Color(0xFF4CAF50) else Color(0xFF2E7D32)
+    get() = if (isSystemDarkThemeGlobal) Color(0xFF4ADE80) else Color(0xFF2E7D32)
 
 val AccentRed: Color
-    get() = if (isSystemDarkThemeGlobal) Color(0xFFF44336) else Color(0xFFC62828)
+    get() = if (isSystemDarkThemeGlobal) Color(0xFFFF6B6B) else Color(0xFFC62828)
 
 val TextPrimary: Color
     get() = if (isSystemDarkThemeGlobal) Color(0xFFFFFFFF) else Color(0xFF1C1C1E)

@@ -86,6 +86,8 @@ data class AppStrings(
     val range: String = "Range (High − Low)",
     val today: String = "Today",
     val dailyRates: String = "Daily Rates",
+    val weeklyRates: String = "Weekly Rates",
+    val showMore: String = "Show more",
     val convertedAtTodayRate: String = "Converted at today's rate",
     val dateHeader: String = "Date",
     val closeRateHeader: String = "Close Rate",

@@ -53,8 +53,8 @@ fun PriceAlertsScreen(
     val latestRate by viewModel.latestRate.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
-    val currentGoldPrice = latestRate?.goldPrice24k ?: 76.20
-    val currentSilverPrice = latestRate?.silverPrice ?: 0.96
+    val currentGoldPrice = latestRate?.goldPrice24k
+    val currentSilverPrice = latestRate?.silverPrice
 
     // Form states
     var isGold by remember { mutableStateOf(true) }
@@ -117,11 +117,21 @@ fun PriceAlertsScreen(
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text("Current Gold (24K)", color = TextSecondary, fontSize = 12.sp)
-                            Text(com.goldsilver.livecalc.util.CurrencyFormatter.formatCurrency(currentGoldPrice, currency), color = GoldPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            Text(
+                                text = currentGoldPrice?.let { com.goldsilver.livecalc.util.CurrencyFormatter.formatCurrency(it, currency) } ?: "—",
+                                color = GoldPrimary,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp
+                            )
                         }
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text("Current Silver", color = TextSecondary, fontSize = 12.sp)
-                            Text(com.goldsilver.livecalc.util.CurrencyFormatter.formatCurrency(currentSilverPrice, currency), color = SilverPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            Text(
+                                text = currentSilverPrice?.let { com.goldsilver.livecalc.util.CurrencyFormatter.formatCurrency(it, currency) } ?: "—",
+                                color = SilverPrimary,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp
+                            )
                         }
                     }
                 }

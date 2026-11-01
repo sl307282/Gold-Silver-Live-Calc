@@ -9,7 +9,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -244,14 +246,23 @@ fun PriceRangeBar(
             }
 
             // Row 3 (labelSmall, centered under the dot, clamped so it never clips at either edge)
-            val rawTextX = dotXPx - (textWidth / 2f)
-            val clampedTextX = rawTextX.coerceIn(0f, (maxWidthPx - textWidth).coerceAtLeast(0f))
+            var textWidthPx by remember(todayText) { androidx.compose.runtime.mutableFloatStateOf(textWidth) }
+            val rawTextX = dotXPx - (textWidthPx / 2f)
+            val clampedTextX = rawTextX.coerceIn(0f, (maxWidthPx - textWidthPx).coerceAtLeast(0f))
 
             Text(
                 text = todayText,
                 style = todayStyle,
                 color = TextPrimary,
                 fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                softWrap = false,
+                onTextLayout = { textLayoutResult ->
+                    val actualW = textLayoutResult.size.width.toFloat()
+                    if (actualW > 0f && actualW != textWidthPx) {
+                        textWidthPx = actualW
+                    }
+                },
                 modifier = Modifier
                     .graphicsLayer {
                         translationX = clampedTextX

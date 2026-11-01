@@ -6,21 +6,30 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.util.Calendar
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.goldsilver.livecalc.data.local.entities.RateEntity
 import com.goldsilver.livecalc.ui.components.HistoryChartPoint
@@ -124,10 +133,45 @@ fun ChartsHistoryScreen(
         }
     }
 
-    // Auto-sync rates and history when screen opens
-    LaunchedEffect(Unit) {
-        viewModel.refreshRates(force = false)
+    var showAllWeeklyRows by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(selectedRange) {
+        showAllWeeklyRows = false
     }
+
+    val is1Y = selectedRange == "1Y"
+
+    val weeklyCloses = remember(chartPoints) {
+        val cal = Calendar.getInstance(TimeZone.getDefault(), Locale.US)
+        val weekMap = linkedMapOf<String, HistoryChartPoint>()
+        chartPoints.forEach { pt ->
+            cal.timeInMillis = pt.timestamp
+            val year = cal.get(Calendar.YEAR)
+            val week = cal.get(Calendar.WEEK_OF_YEAR)
+            val month = cal.get(Calendar.MONTH)
+            val adjustedYear = if (month == Calendar.DECEMBER && week == 1) {
+                year + 1
+            } else if (month == Calendar.JANUARY && week >= 52) {
+                year - 1
+            } else {
+                year
+            }
+            val key = "$adjustedYear-$week"
+            weekMap[key] = pt
+        }
+        weekMap.values.toList()
+    }
+
+    val chronologicalList = remember(is1Y, chartPoints, weeklyCloses) {
+        if (is1Y) weeklyCloses else chartPoints
+    }
+    val fullRatesList = remember(chronologicalList) {
+        chronologicalList.asReversed()
+    }
+    val displayRatesList = remember(is1Y, fullRatesList, showAllWeeklyRows) {
+        if (is1Y && !showAllWeeklyRows) fullRatesList.take(30) else fullRatesList
+    }
+    val hasShowMore = is1Y && fullRatesList.size > 30 && !showAllWeeklyRows
 
     Scaffold(
         topBar = {
@@ -179,7 +223,6 @@ fun ChartsHistoryScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(bottom = 36.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -231,6 +274,7 @@ fun ChartsHistoryScreen(
                         )
                     }
                 }
+                Spacer(modifier = Modifier.height(16.dp))
             }
 
             // Range Selectors (7D, 30D, 1Y)
@@ -288,6 +332,7 @@ fun ChartsHistoryScreen(
                         }
                     }
                 }
+                Spacer(modifier = Modifier.height(16.dp))
             }
 
             // Trend Chart Container
@@ -377,6 +422,7 @@ fun ChartsHistoryScreen(
                         )
                     }
                 }
+                Spacer(modifier = Modifier.height(16.dp))
             }
 
             // Stat Summary Card (Title follows the Gold / Silver toggle)
@@ -501,7 +547,7 @@ fun ChartsHistoryScreen(
                                     val isPeriodDown = periodDiff < -0.001
                                     val arrow = if (isPeriodUp) "▲" else if (isPeriodDown) "▼" else ""
                                     val color = if (isPeriodUp) AccentGreen else if (isPeriodDown) AccentRed else TextMuted
-                                    val unsignedAmount = PriceConverter.format(kotlin.math.abs(periodDiff), selectedCurrency, perGram = true)
+                                    val unsignedAmount = PriceConverter.formatAmount(kotlin.math.abs(periodDiff), selectedCurrency)
                                     val unsignedPercent = String.format(Locale.US, "%.2f", kotlin.math.abs(periodPercent))
 
                                     Text(
@@ -521,7 +567,7 @@ fun ChartsHistoryScreen(
                                 val isPeriodDown = periodDiff < -0.001
                                 val arrow = if (isPeriodUp) "▲" else if (isPeriodDown) "▼" else ""
                                 val color = if (isPeriodUp) AccentGreen else if (isPeriodDown) AccentRed else TextMuted
-                                val unsignedAmount = PriceConverter.format(kotlin.math.abs(periodDiff), selectedCurrency, perGram = true)
+                                val unsignedAmount = PriceConverter.formatAmount(kotlin.math.abs(periodDiff), selectedCurrency)
                                 val unsignedPercent = String.format(Locale.US, "%.2f", kotlin.math.abs(periodPercent))
 
                                 val takeawaySentence = if (isPeriodUp) {
@@ -634,151 +680,254 @@ fun ChartsHistoryScreen(
                             }
                         }
                     }
+                    Spacer(modifier = Modifier.height(16.dp))
                 }
             }
 
-            // Daily Rates List (Renders below summary with bottom-nav padding)
-            item {
-                if (chartPoints.isNotEmpty()) {
-                    val reverseDailyList = chartPoints.asReversed()
-                    val dailyDateFormat = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
+            // Daily / Weekly Rates List (Direct LazyColumn items)
+            if (chartPoints.isNotEmpty()) {
+                val dailyDateFormat = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
+                val ratesTitle = "${if (isGoldSelected) strings.metalGold else strings.metalSilver} ${if (is1Y) strings.weeklyRates else strings.dailyRates}"
+                val tableBorderColor = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.08f)
 
-                    Card(
+                // Header Item: top corners rounded, open bottom
+                item(key = "rates_header") {
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
-                            .border(
-                                width = 0.5.dp,
-                                color = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.08f),
-                                shape = RoundedCornerShape(16.dp)
-                            ),
-                        colors = CardDefaults.cardColors(containerColor = DarkSurface),
-                        shape = RoundedCornerShape(16.dp)
+                            .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                            .background(DarkSurface)
+                            .drawBehind {
+                                val stroke = 0.5.dp.toPx()
+                                val r = 16.dp.toPx()
+                                val w = size.width
+                                val h = size.height
+                                val path = Path().apply {
+                                    moveTo(0f, h)
+                                    lineTo(0f, r)
+                                    quadraticTo(0f, 0f, r, 0f)
+                                    lineTo(w - r, 0f)
+                                    quadraticTo(w, 0f, w, r)
+                                    lineTo(w, h)
+                                }
+                                drawPath(path, tableBorderColor, style = Stroke(width = stroke))
+                            }
+                            .padding(16.dp)
                     ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        Text(
+                            text = ratesTitle,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = TextPrimary,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        HorizontalDivider(color = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.08f))
+                        Spacer(modifier = Modifier.height(10.dp))
+                        // Column headers
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "${if (isGoldSelected) strings.metalGold else strings.metalSilver} ${strings.dailyRates}",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = TextPrimary,
-                                fontWeight = FontWeight.Bold
+                                text = strings.dateHeader,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextMuted,
+                                modifier = Modifier.weight(1.1f)
                             )
+                            Text(
+                                text = strings.closeRateHeader,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextMuted,
+                                modifier = Modifier.weight(1.3f),
+                                textAlign = TextAlign.End
+                            )
+                            Text(
+                                text = strings.changeHeader,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextMuted,
+                                modifier = Modifier.weight(1.0f),
+                                textAlign = TextAlign.End
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        HorizontalDivider(color = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.03f) else Color.Black.copy(alpha = 0.04f))
+                    }
+                }
 
-                            HorizontalDivider(color = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.08f))
+                // Individual Rate Rows
+                itemsIndexed(
+                    items = displayRatesList,
+                    key = { _, pt -> pt.dateKey }
+                ) { revIdx, pt ->
+                    val origIdx = chronologicalList.size - 1 - revIdx
+                    val prevPrice = if (origIdx > 0) chronologicalList[origIdx - 1].price else null
+                    val diff = prevPrice?.let { pt.price - it }
+                    val diffPercent = if (prevPrice != null && prevPrice > 0.0) {
+                        ((pt.price - prevPrice) / prevPrice) * 100.0
+                    } else null
 
-                            // Header row
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = strings.dateHeader,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = TextMuted,
-                                    modifier = Modifier.weight(1.1f)
-                                )
-                                Text(
-                                    text = strings.closeRateHeader,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = TextMuted,
-                                    modifier = Modifier.weight(1.3f),
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.End
-                                )
-                                Text(
-                                    text = strings.changeHeader,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = TextMuted,
-                                    modifier = Modifier.weight(1.0f),
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.End
-                                )
-                            }
+                    val isCardBottom = !hasShowMore && (revIdx == displayRatesList.size - 1)
 
-                            HorizontalDivider(color = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.03f) else Color.Black.copy(alpha = 0.04f))
-
-                            // Rows for each day in selected period (reverse chronological)
-                            reverseDailyList.forEachIndexed { revIdx, pt ->
-                                val origIdx = chartPoints.size - 1 - revIdx
-                                val prevPrice = if (origIdx > 0) chartPoints[origIdx - 1].price else null
-                                val diff = prevPrice?.let { pt.price - it }
-                                val diffPercent = if (prevPrice != null && prevPrice > 0.0) {
-                                    ((pt.price - prevPrice) / prevPrice) * 100.0
-                                } else null
-
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 4.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    val dateStr = dailyDateFormat.format(Date(pt.timestamp))
-                                    Text(
-                                        text = if (pt.isToday) "${strings.today} • $dateStr" else dateStr,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = if (pt.isToday) (if (isGoldSelected) GoldPrimary else SilverPrimary) else TextSecondary,
-                                        fontWeight = if (pt.isToday) FontWeight.Bold else FontWeight.Normal,
-                                        modifier = Modifier.weight(1.1f)
-                                    )
-                                    Text(
-                                        text = PriceConverter.format(pt.price, selectedCurrency, perGram = true),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = TextPrimary,
-                                        fontWeight = FontWeight.Medium,
-                                        modifier = Modifier.weight(1.3f),
-                                        textAlign = androidx.compose.ui.text.style.TextAlign.End
-                                    )
-                                    Box(
-                                        modifier = Modifier.weight(1.0f),
-                                        contentAlignment = Alignment.CenterEnd
-                                    ) {
-                                        if (diff != null && diffPercent != null) {
-                                            val absPercentStr = String.format(Locale.US, "%.2f", kotlin.math.abs(diffPercent))
-                                            when {
-                                                diff > 0.001 -> Text(
-                                                    text = "▲ +$absPercentStr%",
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = AccentGreen,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                                diff < -0.001 -> Text(
-                                                    text = "▼ $absPercentStr%",
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = AccentRed,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                                else -> Text(
-                                                    text = "0.00%",
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = TextMuted,
-                                                    fontWeight = FontWeight.Medium
-                                                )
-                                            }
-                                        } else {
-                                            Text(
-                                                text = "—",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = TextMuted
-                                            )
-                                        }
-                                    }
+                    val rowModifier = if (isCardBottom) {
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp))
+                            .background(DarkSurface)
+                            .drawBehind {
+                                val stroke = 0.5.dp.toPx()
+                                val r = 16.dp.toPx()
+                                val w = size.width
+                                val h = size.height
+                                val path = Path().apply {
+                                    moveTo(0f, 0f)
+                                    lineTo(0f, h - r)
+                                    quadraticTo(0f, h, r, h)
+                                    lineTo(w - r, h)
+                                    quadraticTo(w, h, w, h - r)
+                                    lineTo(w, 0f)
                                 }
+                                drawPath(path, tableBorderColor, style = Stroke(width = stroke))
+                            }
+                    } else {
+                        Modifier
+                            .fillMaxWidth()
+                            .background(DarkSurface)
+                            .drawBehind {
+                                val stroke = 0.5.dp.toPx()
+                                drawLine(tableBorderColor, Offset(0f, 0f), Offset(0f, size.height), stroke)
+                                drawLine(tableBorderColor, Offset(size.width, 0f), Offset(size.width, size.height), stroke)
+                            }
+                    }
 
-                                if (revIdx < reverseDailyList.size - 1) {
-                                    HorizontalDivider(
-                                        color = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.02f) else Color.Black.copy(alpha = 0.03f)
+                    Column(
+                        modifier = rowModifier
+                            .padding(horizontal = 16.dp)
+                            .padding(bottom = if (isCardBottom) 12.dp else 0.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            val dateStr = dailyDateFormat.format(Date(pt.timestamp))
+                            Text(
+                                text = if (pt.isToday) "${strings.today} • $dateStr" else dateStr,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (pt.isToday) (if (isGoldSelected) GoldPrimary else SilverPrimary) else TextSecondary,
+                                fontWeight = if (pt.isToday) FontWeight.Bold else FontWeight.Normal,
+                                modifier = Modifier.weight(1.1f)
+                            )
+                            Text(
+                                text = PriceConverter.format(pt.price, selectedCurrency, perGram = true),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextPrimary,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.weight(1.3f),
+                                textAlign = TextAlign.End
+                            )
+                            Box(
+                                modifier = Modifier.weight(1.0f),
+                                contentAlignment = Alignment.CenterEnd
+                            ) {
+                                if (diff != null && diffPercent != null) {
+                                    val absPercentStr = String.format(Locale.US, "%.2f", kotlin.math.abs(diffPercent))
+                                    when {
+                                        diff > 0.001 -> Text(
+                                            text = "▲ +$absPercentStr%",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = AccentGreen,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        diff < -0.001 -> Text(
+                                            text = "▼ $absPercentStr%",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = AccentRed,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        else -> Text(
+                                            text = "0.00%",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = TextMuted,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                } else {
+                                    Text(
+                                        text = "—",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = TextMuted
+                                    )
+                                }
+                            }
+                        }
+
+                        if (!isCardBottom) {
+                            HorizontalDivider(
+                                color = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.02f) else Color.Black.copy(alpha = 0.03f)
+                            )
+                        }
+                    }
+                }
+
+                // Show more button for 1Y weekly rates
+                if (hasShowMore) {
+                    item(key = "rates_show_more") {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp))
+                                .background(DarkSurface)
+                                .drawBehind {
+                                    val stroke = 0.5.dp.toPx()
+                                    val r = 16.dp.toPx()
+                                    val w = size.width
+                                    val h = size.height
+                                    val path = Path().apply {
+                                        moveTo(0f, 0f)
+                                        lineTo(0f, h - r)
+                                        quadraticTo(0f, h, r, h)
+                                        lineTo(w - r, h)
+                                        quadraticTo(w, h, w, h - r)
+                                        lineTo(w, 0f)
+                                    }
+                                    drawPath(path, tableBorderColor, style = Stroke(width = stroke))
+                                }
+                        ) {
+                            HorizontalDivider(
+                                color = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.03f) else Color.Black.copy(alpha = 0.04f)
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showAllWeeklyRows = true }
+                                    .padding(vertical = 14.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Text(
+                                        text = strings.showMore,
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = if (isGoldSelected) GoldPrimary else SilverPrimary,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Icon(
+                                        imageVector = Icons.Default.KeyboardArrowDown,
+                                        contentDescription = strings.showMore,
+                                        tint = if (isGoldSelected) GoldPrimary else SilverPrimary,
+                                        modifier = Modifier.size(18.dp)
                                     )
                                 }
                             }
                         }
                     }
                 }
-            }
-
-            item {
-                Spacer(modifier = Modifier.height(24.dp))
             }
         }
     }

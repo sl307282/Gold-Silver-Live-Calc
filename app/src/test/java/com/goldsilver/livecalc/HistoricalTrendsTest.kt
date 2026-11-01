@@ -5,12 +5,17 @@ import com.goldsilver.livecalc.data.local.entities.RateEntity
 import com.goldsilver.livecalc.ui.components.calculatePriceRangeFraction
 import com.goldsilver.livecalc.ui.components.getPriceRangeCaption
 import com.goldsilver.livecalc.ui.components.getPriceRangeStatus
+import com.goldsilver.livecalc.ui.components.HistoryChartPoint
 import com.goldsilver.livecalc.ui.components.PriceRangeStatus
 import com.goldsilver.livecalc.ui.viewmodel.Period
 import com.goldsilver.livecalc.util.PriceConverter
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.Calendar
+import java.util.Locale
+import java.util.TimeZone
 
 class HistoricalTrendsTest {
 
@@ -373,5 +378,111 @@ class HistoricalTrendsTest {
             "Current price is 50% of the way between the 7-day low ₹13,777.65 and high ₹14,428.12",
             contentDesc
         )
+    }
+
+    @Test
+    fun testChangeRowsDoNotContainPerGramWhileRateRowsDo() {
+        val currency = "INR"
+        val rateAmount = 13777.65
+        val changeAmount = 422.92
+
+        // Rate rows MUST contain "/ g"
+        val highestRateStr = PriceConverter.format(rateAmount, currency, perGram = true)
+        val lowestRateStr = PriceConverter.format(rateAmount, currency, perGram = true)
+        val averagePriceStr = PriceConverter.format(rateAmount, currency, perGram = true)
+        val rangeStr = PriceConverter.format(500.0, currency, perGram = true)
+        val closeRateStr = PriceConverter.format(rateAmount, currency, perGram = true)
+
+        assertTrue(highestRateStr.endsWith(" / g"))
+        assertTrue(lowestRateStr.endsWith(" / g"))
+        assertTrue(averagePriceStr.endsWith(" / g"))
+        assertTrue(rangeStr.endsWith(" / g"))
+        assertTrue(closeRateStr.endsWith(" / g"))
+
+        // Change rows must NOT contain "/ g"
+        val todaysChangeStr = PriceConverter.formatAbsolute(changeAmount, currency)
+        val periodChangeStr = PriceConverter.formatAmount(changeAmount, currency)
+
+        assertFalse(todaysChangeStr.contains("/ g"))
+        assertFalse(periodChangeStr.contains("/ g"))
+
+        val todaysChangeDisplay = "▼ $todaysChangeStr (2.98%)"
+        val periodChangeDisplay = "▼ $periodChangeStr (3.57%)"
+        assertFalse(todaysChangeDisplay.contains("/ g"))
+        assertFalse(periodChangeDisplay.contains("/ g"))
+    }
+
+    @Test
+    fun testWeeklyCloseGroupingAndMax30RowsPagination() {
+        // Generate 70 days of mock chart points (~10 weeks)
+        val cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"), Locale.US)
+        cal.set(2026, Calendar.JANUARY, 1, 12, 0, 0)
+        cal.set(Calendar.MILLISECOND, 0)
+
+        val chartPoints = (1..70).map { day ->
+            val timestamp = cal.timeInMillis
+            val price = 1000.0 + day * 5.0
+            val dateKey = "2026-01-$day"
+            cal.add(Calendar.DAY_OF_YEAR, 1)
+            HistoryChartPoint(
+                timestamp = timestamp,
+                price = price,
+                dateKey = dateKey,
+                isToday = (day == 70)
+            )
+        }
+
+        // Group into weekly closes
+        val groupingCal = Calendar.getInstance(TimeZone.getTimeZone("UTC"), Locale.US)
+        val weekMap = linkedMapOf<String, HistoryChartPoint>()
+        chartPoints.forEach { pt ->
+            groupingCal.timeInMillis = pt.timestamp
+            val year = groupingCal.get(Calendar.YEAR)
+            val week = groupingCal.get(Calendar.WEEK_OF_YEAR)
+            val month = groupingCal.get(Calendar.MONTH)
+            val adjustedYear = if (month == Calendar.DECEMBER && week == 1) {
+                year + 1
+            } else if (month == Calendar.JANUARY && week >= 52) {
+                year - 1
+            } else {
+                year
+            }
+            val key = "$adjustedYear-$week"
+            weekMap[key] = pt
+        }
+        val weeklyCloses = weekMap.values.toList()
+
+        // 70 days spanning 10-11 weeks
+        assertTrue(weeklyCloses.size in 10..12)
+
+        // Verify each weekly close is the last point in that week
+        weeklyCloses.forEach { closePt ->
+            groupingCal.timeInMillis = closePt.timestamp
+            val closeWeek = groupingCal.get(Calendar.WEEK_OF_YEAR)
+            val pointsInWeek = chartPoints.filter {
+                groupingCal.timeInMillis = it.timestamp
+                groupingCal.get(Calendar.WEEK_OF_YEAR) == closeWeek
+            }
+            assertEquals(pointsInWeek.last().timestamp, closePt.timestamp)
+        }
+
+        // Test 30-row cutoff when weeklyCloses > 30
+        val manyWeeklyCloses = (1..52).map { week ->
+            HistoryChartPoint(
+                timestamp = week * 7L * 86400000L,
+                price = 1000.0 + week * 10,
+                dateKey = "week-$week",
+                isToday = (week == 52)
+            )
+        }
+        val fullList = manyWeeklyCloses.asReversed()
+        val pagedListInitial = fullList.take(30)
+        assertEquals(30, pagedListInitial.size)
+        // Verify newest week is first
+        assertEquals("week-52", pagedListInitial.first().dateKey)
+
+        // After "Show more"
+        val pagedListExpanded = fullList
+        assertEquals(52, pagedListExpanded.size)
     }
 }

@@ -164,6 +164,9 @@ fun HistoryLineChart(
 
             val labelHeight = 24.dp.toPx()
             val chartHeight = (height - labelHeight).coerceAtLeast(10f)
+            val topInset = 8.dp.toPx()
+            val bottomInset = 8.dp.toPx()
+            val plotHeight = (chartHeight - topInset - bottomInset).coerceAtLeast(10f)
 
             // Dynamic Y-axis amount labels
             val midPrice = (maxPrice + minPrice) / 2.0
@@ -198,11 +201,11 @@ fun HistoryLineChart(
             val gridStroke = Stroke(width = 1f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f), 0f))
 
             val yGridMax = if (graphMax > graphMin) {
-                (chartHeight - ((maxPrice - graphMin) / (graphMax - graphMin) * chartHeight)).toFloat()
-            } else 0f
+                (topInset + plotHeight - ((maxPrice - graphMin) / (graphMax - graphMin) * plotHeight)).toFloat()
+            } else topInset
             val yGridMin = if (graphMax > graphMin) {
-                (chartHeight - ((minPrice - graphMin) / (graphMax - graphMin) * chartHeight)).toFloat()
-            } else chartHeight
+                (topInset + plotHeight - ((minPrice - graphMin) / (graphMax - graphMin) * plotHeight)).toFloat()
+            } else topInset + plotHeight
             val yGridMid = (yGridMax + yGridMin) / 2f
 
             // Gridline 1: Max
@@ -276,9 +279,9 @@ fun HistoryLineChart(
             val screenPoints = points.mapIndexed { index, point ->
                 val x = plotLeft + index * (plotWidth / (numPoints - 1))
                 val rawY = if (graphMax > graphMin) {
-                    (chartHeight - ((point.price - graphMin) / (graphMax - graphMin) * chartHeight)).toFloat()
+                    (topInset + plotHeight - ((point.price - graphMin) / (graphMax - graphMin) * plotHeight)).toFloat()
                 } else {
-                    chartHeight / 2f
+                    topInset + plotHeight / 2f
                 }
                 val animatedY = chartHeight - ((chartHeight - rawY) * animationProgress.value)
                 Offset(x, animatedY)
@@ -333,8 +336,8 @@ fun HistoryLineChart(
                 // All points for 7D
                 points.indices.toList()
             } else {
-                // At least 4 evenly spaced
-                val count = 4
+                // 30D shows 5 evenly spaced labels; other ranges show 4
+                val count = if (selectedRange == "30D") 5 else 4
                 (0 until count).map { i -> (i * (numPoints - 1) / (count - 1)) }.distinct()
             }
 
@@ -382,9 +385,9 @@ fun HistoryLineChart(
                 val highBadgeW = highTextResult.size.width + padH * 2f
                 val highBadgeH = highTextResult.size.height + padV * 2f
                 val highBadgeX = (highOffset.x - highBadgeW / 2f).coerceIn(plotLeft, plotRight - highBadgeW)
-                val highBadgeY = (highOffset.y - highBadgeH - 8.dp.toPx()).let {
-                    if (it < 0f) highOffset.y + 10.dp.toPx() else it
-                }
+                val highBadgeY = (highOffset.y - highBadgeH - 6.dp.toPx()).let {
+                    if (it < 2.dp.toPx()) highOffset.y + 8.dp.toPx() else it
+                }.coerceIn(0f, chartHeight - highBadgeH)
 
                 drawRoundRect(
                     color = DarkSurface,
@@ -417,9 +420,9 @@ fun HistoryLineChart(
                 val lowBadgeW = lowTextResult.size.width + padH * 2f
                 val lowBadgeH = lowTextResult.size.height + padV * 2f
                 val lowBadgeX = (lowOffset.x - lowBadgeW / 2f).coerceIn(plotLeft, plotRight - lowBadgeW)
-                val lowBadgeY = (lowOffset.y + 10.dp.toPx()).let {
-                    if (it + lowBadgeH > chartHeight) lowOffset.y - lowBadgeH - 8.dp.toPx() else it
-                }
+                val lowBadgeY = (lowOffset.y + 8.dp.toPx()).let {
+                    if (it + lowBadgeH > chartHeight - 2.dp.toPx()) lowOffset.y - lowBadgeH - 6.dp.toPx() else it
+                }.coerceIn(0f, chartHeight - lowBadgeH)
 
                 drawRoundRect(
                     color = DarkSurface,

@@ -42,6 +42,8 @@
     <string name="range">Range (High − Low)</string>
     <string name="today">Today</string>
     <string name="daily_rates">Daily Rates</string>
+    <string name="weekly_rates">Weekly Rates</string>
+    <string name="show_more">Show more</string>
     <string name="converted_at_today_rate">Converted at today\'s rate</string>
     <string name="date_header">Date</string>
     <string name="close_rate_header">Close Rate</string>

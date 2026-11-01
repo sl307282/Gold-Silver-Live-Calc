@@ -46,7 +46,7 @@ class NotificationHelper(private val context: Context) {
         )
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher_monochrome) // Use clean monochrome icon for notifications
+            .setSmallIcon(R.mipmap.ic_launcher) // Use default launcher icon as notification icon
             .setContentTitle(title)
             .setContentText(message)
             .setPriority(NotificationCompat.PRIORITY_HIGH)

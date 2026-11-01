@@ -98,7 +98,9 @@ fun SplashContent(
             modifier = Modifier.padding(horizontal = 24.dp)
         ) {
             // Centered launcher icon with fade+scale animation
-            Box(
+            Image(
+                painter = painterResource(id = R.mipmap.ic_launcher),
+                contentDescription = stringResource(id = R.string.app_name),
                 modifier = Modifier
                     .size(96.dp)
                     .graphicsLayer {
@@ -107,15 +109,7 @@ fun SplashContent(
                         this.scaleY = scale
                     }
                     .clip(RoundedCornerShape(22.dp))
-                    .background(Color(0xFF0D0D0D)),
-                contentAlignment = Alignment.Center
-            ) {
-                Image(
-                    painter = painterResource(id = R.drawable.ic_launcher_foreground),
-                    contentDescription = stringResource(id = R.string.app_name),
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
+            )
 
             Spacer(modifier = Modifier.height(20.dp))
 

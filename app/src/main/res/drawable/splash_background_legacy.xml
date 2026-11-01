@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Solid black background -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#000000" />
+        </shape>
+    </item>
+    
+    <!-- Center animated icon equivalent -->
+    <item
+        android:width="288dp"
+        android:height="288dp"
+        android:gravity="center">
+        <bitmap
+            android:src="@drawable/splash_logo_combined"
+            android:gravity="fill" />
+    </item>
+
+    <!-- Branding image equivalent -->
+    <!-- Android 12 Branding slot is 200dp x 80dp, offset by about 60dp from the bottom -->
+    <item
+        android:width="200dp"
+        android:height="80dp"
+        android:gravity="bottom|center_horizontal"
+        android:bottom="60dp">
+        <bitmap
+            android:src="@drawable/splash_tagline"
+            android:gravity="fill" />
+    </item>
+</layer-list>

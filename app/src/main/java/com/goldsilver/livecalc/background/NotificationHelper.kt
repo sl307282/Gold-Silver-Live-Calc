@@ -24,7 +24,7 @@ class NotificationHelper(private val context: Context) {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val name = "Gold Silver Live Calc Price Alerts"
+            val name = "Price Alerts"
             val descriptionText = "Triggers alerts when Gold or Silver crosses your target price"
             val importance = NotificationManager.IMPORTANCE_HIGH
             val channel = NotificationChannel(CHANNEL_ID, name, importance).apply {

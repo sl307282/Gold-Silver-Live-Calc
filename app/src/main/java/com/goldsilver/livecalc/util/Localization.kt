@@ -304,7 +304,7 @@ val EnglishStrings = AppStrings(
 
     settingsTitle = "Settings",
     preferencesAndAlerts = "PREFERENCES & ALERTS",
-    priceAlertNotifications = "Gold Silver Live Calc Price Alerts",
+    priceAlertNotifications = "Gold & Silver Price Alerts",
     alertsEnabledDesc = "Alerts enabled for target rates",
     alertsDisabledDesc = "Alerts disabled",
     displayCurrency = "Display Currency",

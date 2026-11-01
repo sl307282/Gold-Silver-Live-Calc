@@ -1,13 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Gold Silver Live Calc</string>
-    <string name="splash_tagline">Calculate with Confidence</string>
-    <string name="splash_fetching_rates">Fetching latest rates…</string>
-    <string name="splash_version_format">v%1$s</string>
-    <string name="price_alert_channel_name">Gold Silver Live Calc Price Alerts</string>
-    <string name="share_app_subject">Gold Silver Live Calc</string>
-    <string name="share_app_text">Check out Gold Silver Live Calc for real-time rates and trend charts! Download here: https://play.google.com/store/apps/details?id=%1$s</string>
-    <string name="settings_footer_tagline">Calculate with Confidence</string>
 
     <!-- Home Page Labels & Titles -->
     <string name="gold_xau">Gold (XAU)</string>

@@ -399,8 +399,8 @@ fun SettingsScreen(
                                 .clickable {
                                     val shareIntent = Intent(Intent.ACTION_SEND).apply {
                                         type = "text/plain"
-                                        putExtra(Intent.EXTRA_SUBJECT, "Gold Silver Live Calc")
-                                        putExtra(Intent.EXTRA_TEXT, "Check out Gold Silver Live Calc for real-time rates and trend charts! Download here: https://play.google.com/store/apps/details?id=${context.packageName}")
+                                        putExtra(Intent.EXTRA_SUBJECT, "Gold & Silver Live Calculator")
+                                        putExtra(Intent.EXTRA_TEXT, "Check out Gold & Silver Live Calculator for real-time rates and trend charts! Download here: https://play.google.com/store/apps/details?id=${context.packageName}")
                                     }
                                     context.startActivity(Intent.createChooser(shareIntent, "Share via"))
                                 }
@@ -453,33 +453,8 @@ fun SettingsScreen(
                 }
             }
 
-            // Branded Settings Footer
             item {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 12.dp, bottom = 24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = "Gold Silver Live Calc",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextPrimary.copy(alpha = 0.85f)
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Calculate with Confidence",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary.copy(alpha = 0.7f)
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "v${com.goldsilver.livecalc.BuildConfig.VERSION_NAME}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TextMuted.copy(alpha = 0.5f)
-                    )
-                }
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
     }

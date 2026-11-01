@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.SplashScreen" parent="Theme.SplashScreen.IconBackground">
-        <item name="windowSplashScreenBackground">@color/splash_background</item>
-        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+    <style name="Theme.GoldSilverLiveCalc.Splash" parent="Theme.SplashScreen">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionBar">false</item>
+        <item name="windowSplashScreenBackground">#000000</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_icon</item>
+        <item name="android:windowSplashScreenBrandingImage">@drawable/splash_tagline</item>
         <item name="postSplashScreenTheme">@style/Theme.GoldSilverLiveCalc</item>
     </style>
-
-    <style name="Theme.GoldSilverLiveCalc.Splash" parent="Theme.SplashScreen" />
 </resources>

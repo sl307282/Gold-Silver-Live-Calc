@@ -6,19 +6,21 @@
         <item name="android:windowActionBar">false</item>
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
-        <item name="android:statusBarColor">@android:color/transparent</item>
-        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:statusBarColor">#050505</item>
+        <item name="android:navigationBarColor">#050505</item>
         <item name="android:windowBackground">#050505</item>
         <item name="android:windowLightStatusBar" tools:targetApi="m" xmlns:tools="http://schemas.android.com/tools">false</item>
     </style>
 
-    <!-- Splash Screen Theme (androidx.core:core-splashscreen) -->
-    <style name="Theme.SplashScreen" parent="Theme.SplashScreen.IconBackground">
-        <item name="windowSplashScreenBackground">@color/splash_background</item>
-        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
-        <item name="postSplashScreenTheme">@style/Theme.GoldSilverLiveCalc</item>
+    <!-- Legacy Splash Screen Theme (Android 11 and below) -->
+    <!-- Bypasses AndroidX core-splashscreen because it doesn't support bottom branding -->
+    <style name="Theme.GoldSilverLiveCalc.Splash" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionBar">false</item>
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:windowBackground">@drawable/splash_background_legacy</item>
+        <item name="android:statusBarColor">#000000</item>
+        <item name="android:navigationBarColor">#000000</item>
     </style>
-
-    <!-- Alias for backward compatibility -->
-    <style name="Theme.GoldSilverLiveCalc.Splash" parent="Theme.SplashScreen" />
 </resources>

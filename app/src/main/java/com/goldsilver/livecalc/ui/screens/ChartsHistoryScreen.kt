@@ -1,5 +1,6 @@
 package com.goldsilver.livecalc.ui.screens
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -7,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -22,8 +24,10 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -173,65 +177,66 @@ fun ChartsHistoryScreen(
     }
     val hasShowMore = is1Y && fullRatesList.size > 30 && !showAllWeeklyRows
 
+    val listState = rememberLazyListState()
+    val isScrolled by remember {
+        derivedStateOf {
+            listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0
+        }
+    }
+
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = strings.historicalTrends,
-                        style = MaterialTheme.typography.titleLarge,
-                        color = GoldPrimary,
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = strings.back,
-                            tint = GoldPrimary
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(DarkBackground)
+            ) {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = strings.historicalTrends,
+                            style = MaterialTheme.typography.titleLarge,
+                            color = GoldPrimary,
+                            fontWeight = FontWeight.Bold
                         )
-                    }
-                },
-                actions = {
-                    IconButton(
-                        onClick = { viewModel.refreshRates(force = true) }
-                    ) {
-                        if (isRefreshing) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                color = GoldPrimary,
-                                strokeWidth = 2.dp
-                            )
-                        } else {
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
                             Icon(
-                                imageVector = Icons.Default.Refresh,
-                                contentDescription = strings.refresh,
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = strings.back,
                                 tint = GoldPrimary
                             )
                         }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBackground)
-            )
-        },
-        containerColor = DarkBackground,
-        modifier = modifier
-    ) { innerPadding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(horizontal = 16.dp),
-            contentPadding = PaddingValues(bottom = 36.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            // Gold / Silver Segmented Toggle (Restored above period chips)
-            item {
+                    },
+                    actions = {
+                        IconButton(
+                            onClick = { viewModel.refreshRates(force = true) }
+                        ) {
+                            if (isRefreshing) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    color = GoldPrimary,
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = strings.refresh,
+                                    tint = GoldPrimary
+                                )
+                            }
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBackground)
+                )
+
+                // Gold / Silver Segmented Toggle (Pinned, 48 dp min height)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(44.dp)
+                        .padding(horizontal = 16.dp)
+                        .height(48.dp)
                         .clip(RoundedCornerShape(10.dp))
                         .background(DarkSurface)
                         .border(
@@ -274,18 +279,19 @@ fun ChartsHistoryScreen(
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(16.dp))
-            }
 
-            // Range Selectors (7D, 30D, 1Y)
-            item {
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Range Selectors (7D, 30D, 1Y) (Pinned)
                 val rangeOptions = listOf(
                     Triple("7D", strings.range7D, Period.D7),
                     Triple("30D", strings.range30D, Period.D30),
                     Triple("1Y", strings.range1Y, Period.Y1)
                 )
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     rangeOptions.forEach { (rangeKey, rangeLabel, period) ->
@@ -332,12 +338,50 @@ fun ChartsHistoryScreen(
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(16.dp))
-            }
 
-            // Trend Chart Container
-            item {
-                val isRangeLocked = selectedRange == "1Y" && !isPremium
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // 1 dp bottom divider that appears only once the list is scrolled
+                val dividerColor = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.08f)
+                val animatedDividerColor by animateColorAsState(
+                    targetValue = if (isScrolled) dividerColor else Color.Transparent,
+                    animationSpec = tween(durationMillis = 200),
+                    label = "headerDividerColor"
+                )
+                HorizontalDivider(
+                    thickness = 1.dp,
+                    color = animatedDividerColor
+                )
+            }
+        },
+        containerColor = DarkBackground,
+        modifier = modifier
+    ) { innerPadding ->
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(horizontal = 16.dp),
+            contentPadding = PaddingValues(top = 16.dp, bottom = 36.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            if (chartPoints.isEmpty()) {
+                item(key = "skeleton_chart") {
+                    ChartCardSkeleton()
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+                item(key = "skeleton_summary") {
+                    MarketSummarySkeleton()
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+                item(key = "skeleton_rates") {
+                    RatesTableSkeleton()
+                }
+            } else {
+                // Trend Chart Container
+                item(key = "chart_container") {
+                    val isRangeLocked = selectedRange == "1Y" && !isPremium
 
                 Box(
                     modifier = Modifier
@@ -426,9 +470,8 @@ fun ChartsHistoryScreen(
             }
 
             // Stat Summary Card (Title follows the Gold / Silver toggle)
-            item {
-                if (chartPoints.isNotEmpty()) {
-                    val prices = chartPoints.map { it.price }
+            item(key = "market_summary") {
+                val prices = chartPoints.map { it.price }
                     val maxPrice = prices.maxOrNull() ?: 0.0
                     val minPrice = prices.minOrNull() ?: 0.0
                     val avgPrice = prices.average()
@@ -682,10 +725,8 @@ fun ChartsHistoryScreen(
                     }
                     Spacer(modifier = Modifier.height(16.dp))
                 }
-            }
 
-            // Daily / Weekly Rates List (Direct LazyColumn items)
-            if (chartPoints.isNotEmpty()) {
+                // Daily / Weekly Rates List (Direct LazyColumn items)
                 val dailyDateFormat = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
                 val ratesTitle = "${if (isGoldSelected) strings.metalGold else strings.metalSilver} ${if (is1Y) strings.weeklyRates else strings.dailyRates}"
                 val tableBorderColor = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.08f)
@@ -932,3 +973,160 @@ fun ChartsHistoryScreen(
         }
     }
 }
+
+@Composable
+private fun rememberShimmerBrush(): Brush {
+    val transition = rememberInfiniteTransition(label = "shimmer")
+    val translateAnim by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1200f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "shimmerTranslate"
+    )
+    val isDark = isSystemDarkThemeGlobal
+    val baseColor = if (isDark) Color(0xFF1E1E1E) else Color(0xFFE5E5EA)
+    val highlightColor = if (isDark) Color(0xFF2C2C2C) else Color(0xFFF2F2F7)
+
+    return Brush.linearGradient(
+        colors = listOf(baseColor, highlightColor, baseColor),
+        start = Offset(translateAnim - 300f, translateAnim - 300f),
+        end = Offset(translateAnim, translateAnim)
+    )
+}
+
+@Composable
+private fun SkeletonBox(
+    modifier: Modifier = Modifier,
+    shape: Shape = RoundedCornerShape(6.dp)
+) {
+    val shimmerBrush = rememberShimmerBrush()
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .background(shimmerBrush)
+    )
+}
+
+@Composable
+private fun ChartCardSkeleton(modifier: Modifier = Modifier) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(310.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .border(
+                width = 0.5.dp,
+                color = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.08f),
+                shape = RoundedCornerShape(12.dp)
+            ),
+        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    SkeletonBox(modifier = Modifier.size(width = 36.dp, height = 12.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
+                    SkeletonBox(modifier = Modifier.size(width = 72.dp, height = 18.dp))
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    SkeletonBox(modifier = Modifier.size(width = 54.dp, height = 12.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
+                    SkeletonBox(modifier = Modifier.size(width = 90.dp, height = 22.dp))
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    SkeletonBox(modifier = Modifier.size(width = 36.dp, height = 12.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
+                    SkeletonBox(modifier = Modifier.size(width = 72.dp, height = 18.dp))
+                }
+            }
+            SkeletonBox(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(200.dp),
+                shape = RoundedCornerShape(8.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun MarketSummarySkeleton(modifier: Modifier = Modifier) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .border(
+                width = 0.5.dp,
+                color = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.08f),
+                shape = RoundedCornerShape(16.dp)
+            ),
+        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            SkeletonBox(modifier = Modifier.size(width = 160.dp, height = 20.dp))
+            HorizontalDivider(color = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.04f) else Color.Black.copy(alpha = 0.05f))
+            repeat(4) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    SkeletonBox(modifier = Modifier.size(width = 100.dp, height = 14.dp))
+                    SkeletonBox(modifier = Modifier.size(width = 80.dp, height = 14.dp))
+                }
+                HorizontalDivider(color = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.02f) else Color.Black.copy(alpha = 0.03f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun RatesTableSkeleton(modifier: Modifier = Modifier) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .border(
+                width = 0.5.dp,
+                color = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.08f),
+                shape = RoundedCornerShape(16.dp)
+            ),
+        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            SkeletonBox(modifier = Modifier.size(width = 140.dp, height = 20.dp))
+            HorizontalDivider(color = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.04f) else Color.Black.copy(alpha = 0.05f))
+            repeat(5) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    SkeletonBox(modifier = Modifier.size(width = 90.dp, height = 14.dp))
+                    SkeletonBox(modifier = Modifier.size(width = 80.dp, height = 14.dp))
+                    SkeletonBox(modifier = Modifier.size(width = 60.dp, height = 14.dp))
+                }
+                HorizontalDivider(color = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.02f) else Color.Black.copy(alpha = 0.03f))
+            }
+        }
+    }
+}
+

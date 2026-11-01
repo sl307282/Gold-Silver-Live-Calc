@@ -98,7 +98,6 @@ fun HallmarkScreen(
                     }
                 }
             },
-            onLearnMoreClick = { viewModel.openBisWebsite(context) },
             isVerifyEnabled = isHuidValid
         )
     }
@@ -599,35 +598,6 @@ fun HallmarkScreen(
                 }
             }
 
-            // ── 7. Footer Link "Learn more at bis.gov.in" ──────────────────────
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 4.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    TextButton(
-                        onClick = { viewModel.openBisWebsite(context) },
-                        modifier = Modifier.heightIn(min = 48.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                            contentDescription = null,
-                            tint = HallmarkPrimary,
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = stringResource(R.string.link_learn_more_bis),
-                            color = HallmarkPrimary,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-            }
-
             item { Spacer(modifier = Modifier.height(16.dp)) }
         }
     }
@@ -660,7 +630,6 @@ fun HallmarkVerificationScreen(
 fun WhatIsHuidBottomSheet(
     onDismissRequest: () -> Unit,
     onVerifyClick: () -> Unit,
-    onLearnMoreClick: () -> Unit,
     isVerifyEnabled: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -840,38 +809,17 @@ fun WhatIsHuidBottomSheet(
                 }
             }
 
-            // Section 5: Disclaimer + Link
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Text(
-                    text = stringResource(R.string.sheet_disclaimer),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = TextMuted.copy(alpha = 0.6f),
-                    textAlign = TextAlign.Center,
-                    lineHeight = 16.sp
-                )
-                TextButton(
-                    onClick = onLearnMoreClick,
-                    modifier = Modifier.heightIn(min = 48.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                        contentDescription = null,
-                        tint = HallmarkPrimary,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = stringResource(R.string.link_learn_more_bis),
-                        color = HallmarkPrimary,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
+            // Section 5: Disclaimer
+            Text(
+                text = stringResource(R.string.sheet_disclaimer),
+                style = MaterialTheme.typography.labelSmall,
+                color = TextMuted.copy(alpha = 0.6f),
+                textAlign = TextAlign.Center,
+                lineHeight = 16.sp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp)
+            )
         }
     }
 }

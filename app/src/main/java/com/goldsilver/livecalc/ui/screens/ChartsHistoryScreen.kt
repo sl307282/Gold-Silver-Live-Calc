@@ -25,6 +25,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.goldsilver.livecalc.data.local.entities.RateEntity
 import com.goldsilver.livecalc.ui.components.HistoryChartPoint
 import com.goldsilver.livecalc.ui.components.HistoryLineChart
+import com.goldsilver.livecalc.ui.components.PriceRangeBar
 import com.goldsilver.livecalc.ui.theme.*
 import com.goldsilver.livecalc.ui.viewmodel.GoldSilverViewModel
 import com.goldsilver.livecalc.ui.viewmodel.Period
@@ -564,6 +565,22 @@ fun ChartsHistoryScreen(
                                     fontWeight = FontWeight.SemiBold
                                 )
                             }
+
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            PriceRangeBar(
+                                low = minPrice,
+                                high = maxPrice,
+                                current = currentRate ?: chartPoints.lastOrNull()?.price ?: 0.0,
+                                periodLabel = when (uiState.selectedPeriod) {
+                                    Period.D7 -> "7-day"
+                                    Period.D30 -> "30-day"
+                                    Period.Y1 -> "1-year"
+                                },
+                                formatter = { price -> PriceConverter.formatAmount(price, selectedCurrency) }
+                            )
+
+                            Spacer(modifier = Modifier.height(4.dp))
 
                             HorizontalDivider(color = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.04f) else Color.Black.copy(alpha = 0.05f))
 

@@ -2,6 +2,10 @@ package com.goldsilver.livecalc
 
 import com.goldsilver.livecalc.R
 import com.goldsilver.livecalc.data.local.entities.RateEntity
+import com.goldsilver.livecalc.ui.components.calculatePriceRangeFraction
+import com.goldsilver.livecalc.ui.components.getPriceRangeCaption
+import com.goldsilver.livecalc.ui.components.getPriceRangeStatus
+import com.goldsilver.livecalc.ui.components.PriceRangeStatus
 import com.goldsilver.livecalc.ui.viewmodel.Period
 import com.goldsilver.livecalc.util.PriceConverter
 import org.junit.Assert.assertEquals
@@ -289,5 +293,85 @@ class HistoricalTrendsTest {
         val hint = "From 26 Oct to today"
         assertTrue(hint.startsWith("From ") && hint.endsWith(" to today"))
         assertTrue(!hint.contains("Period", ignoreCase = true))
+    }
+
+    @Test
+    fun testPriceRangeFractionCalculation() {
+        // 1. Below low (clamped to 0.0)
+        val fractionBelow = calculatePriceRangeFraction(current = 90.0, low = 100.0, high = 200.0)
+        assertEquals(0.0f, fractionBelow, 0.0001f)
+
+        // 2. Above high (clamped to 1.0)
+        val fractionAbove = calculatePriceRangeFraction(current = 250.0, low = 100.0, high = 200.0)
+        assertEquals(1.0f, fractionAbove, 0.0001f)
+
+        // 3. Equal low/high (fraction = 0.5)
+        val fractionEqual = calculatePriceRangeFraction(current = 100.0, low = 100.0, high = 100.0)
+        assertEquals(0.5f, fractionEqual, 0.0001f)
+
+        // 4. Mid (fraction = 0.5)
+        val fractionMid = calculatePriceRangeFraction(current = 150.0, low = 100.0, high = 200.0)
+        assertEquals(0.5f, fractionMid, 0.0001f)
+
+        // 5. Exact low (fraction = 0.0)
+        val fractionExactLow = calculatePriceRangeFraction(current = 100.0, low = 100.0, high = 200.0)
+        assertEquals(0.0f, fractionExactLow, 0.0001f)
+
+        // 6. Exact high (fraction = 1.0)
+        val fractionExactHigh = calculatePriceRangeFraction(current = 200.0, low = 100.0, high = 200.0)
+        assertEquals(1.0f, fractionExactHigh, 0.0001f)
+
+        // 7. Quarter position (fraction = 0.25)
+        val fractionQuarter = calculatePriceRangeFraction(current = 125.0, low = 100.0, high = 200.0)
+        assertEquals(0.25f, fractionQuarter, 0.0001f)
+    }
+
+    @Test
+    fun testPriceRangeStatusAndCaptions() {
+        // At low (< 0.05)
+        val statusLow = getPriceRangeStatus(0.02f)
+        assertEquals(PriceRangeStatus.AT_LOW, statusLow)
+        assertEquals("At its 7-day low", getPriceRangeCaption(statusLow, "7-day"))
+        assertEquals("At its 30-day low", getPriceRangeCaption(statusLow, "30-day"))
+        assertEquals("At its 1-year low", getPriceRangeCaption(statusLow, "1-year"))
+
+        // At high (> 0.95)
+        val statusHigh = getPriceRangeStatus(0.98f)
+        assertEquals(PriceRangeStatus.AT_HIGH, statusHigh)
+        assertEquals("At its 7-day high", getPriceRangeCaption(statusHigh, "7-day"))
+        assertEquals("At its 30-day high", getPriceRangeCaption(statusHigh, "30-day"))
+        assertEquals("At its 1-year high", getPriceRangeCaption(statusHigh, "1-year"))
+
+        // Nearer the low (< 0.33)
+        val statusNearLow = getPriceRangeStatus(0.20f)
+        assertEquals(PriceRangeStatus.NEAR_LOW, statusNearLow)
+        assertEquals("Nearer the low", getPriceRangeCaption(statusNearLow, "7-day"))
+
+        // Mid-range (0.33..0.66)
+        val statusMid = getPriceRangeStatus(0.50f)
+        assertEquals(PriceRangeStatus.MID_RANGE, statusMid)
+        assertEquals("Mid-range", getPriceRangeCaption(statusMid, "7-day"))
+
+        // Nearer the high (0.66..0.95)
+        val statusNearHigh = getPriceRangeStatus(0.80f)
+        assertEquals(PriceRangeStatus.NEAR_HIGH, statusNearHigh)
+        assertEquals("Nearer the high", getPriceRangeCaption(statusNearHigh, "7-day"))
+    }
+
+    @Test
+    fun testPriceRangeAccessibilityDescription() {
+        val lowStr = "₹13,777.65"
+        val highStr = "₹14,428.12"
+        val periodLabel = "7-day"
+        val fraction = 0.5f
+        val percent = (fraction * 100).toInt()
+
+        val template = "Current price is %1\$d%% of the way between the %2\$s low %3\$s and high %4\$s"
+        val contentDesc = String.format(template, percent, periodLabel, lowStr, highStr)
+
+        assertEquals(
+            "Current price is 50% of the way between the 7-day low ₹13,777.65 and high ₹14,428.12",
+            contentDesc
+        )
     }
 }

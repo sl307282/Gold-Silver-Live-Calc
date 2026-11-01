@@ -90,6 +90,15 @@ data class AppStrings(
     val dateHeader: String = "Date",
     val closeRateHeader: String = "Close Rate",
     val changeHeader: String = "Change",
+    val rangeLowLabel: String = "Low %s",
+    val rangeHighLabel: String = "High %s",
+    val rangeTodayLabel: String = "Today %s",
+    val rangeAtLow: String = "At its %s low",
+    val rangeAtHigh: String = "At its %s high",
+    val rangeNearLow: String = "Nearer the low",
+    val rangeMid: String = "Mid-range",
+    val rangeNearHigh: String = "Nearer the high",
+    val rangeContentDesc: String = "Current price is %1\$d%% of the way between the %2\$s low %3\$s and high %4\$s",
 
     // Calculators (Gold & Silver)
     val goldCalculator: String,

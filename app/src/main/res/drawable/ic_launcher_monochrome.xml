@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Accent Arcs -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 33,63 C 27,53 29,40 37,32 C 38,31 39,32 38,33 C 31,41 30,52 35,61 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 75,63 C 81,53 79,40 71,32 C 70,31 69,32 70,33 C 77,41 78,52 73,61 Z" />
+
+    <!-- Calculator Body (Solid White) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 43,26 L 65,26 A 5,5 0 0 1 70,31 L 70,61 A 5,5 0 0 1 65,66 L 43,66 A 5,5 0 0 1 38,61 L 38,31 A 5,5 0 0 1 43,26 Z" />
+
+    <!-- Screen Cutout (Transparent via EvenOdd or darker cutout) -->
+    <!-- In monochrome adaptive icon, cutouts are drawn in black/transparent or keyed -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M 43,30 L 65,30 A 2,2 0 0 1 67,32 L 67,37 A 2,2 0 0 1 65,39 L 43,39 A 2,2 0 0 1 41,37 L 41,32 A 2,2 0 0 1 43,30 Z" />
+
+    <!-- Keys Cutouts -->
+    <path android:fillColor="#000000" android:pathData="M 42,43 H 48 V 47 H 42 Z" />
+    <path android:fillColor="#000000" android:pathData="M 51,43 H 57 V 47 H 51 Z" />
+    <path android:fillColor="#000000" android:pathData="M 60,43 H 66 V 47 H 60 Z" />
+    <path android:fillColor="#000000" android:pathData="M 42,50 H 48 V 54 H 42 Z" />
+    <path android:fillColor="#000000" android:pathData="M 51,50 H 57 V 54 H 51 Z" />
+    <path android:fillColor="#000000" android:pathData="M 60,50 H 66 V 54 H 60 Z" />
+    <path android:fillColor="#000000" android:pathData="M 42,57 H 48 V 61 H 42 Z" />
+    <path android:fillColor="#000000" android:pathData="M 51,57 H 57 V 61 H 51 Z" />
+    <path android:fillColor="#000000" android:pathData="M 60,57 H 66 V 61 H 60 Z" />
+
+    <!-- Bullion Bars Silhouettes -->
+    <!-- Gold Bullion Bar Silhouette -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 34,62 L 48,62 L 46,69 L 42,76 L 28,76 L 30,69 Z" />
+
+    <!-- Silver Bullion Bar Silhouette -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 60,62 L 74,62 L 72,69 L 68,76 L 54,76 L 56,69 Z" />
+
+</vector>

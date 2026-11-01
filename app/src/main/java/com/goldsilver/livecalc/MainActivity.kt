@@ -4,11 +4,12 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.core.animation.doOnEnd
-import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import androidx.activity.viewModels
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -27,73 +28,36 @@ import com.goldsilver.livecalc.ui.components.CustomBottomNavigation
 import com.goldsilver.livecalc.ui.screens.*
 import com.goldsilver.livecalc.ui.theme.*
 import com.goldsilver.livecalc.ui.viewmodel.GoldSilverViewModel
+import com.goldsilver.livecalc.ui.viewmodel.SplashViewModel
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
     private val viewModel: GoldSilverViewModel by viewModels()
+    private val splashViewModel: SplashViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Install androidx.core:core-splashscreen
+        val splashScreen = installSplashScreen()
+        // Hold system splash until cached Room rates and preferences are ready (max 1500 ms)
+        splashScreen.setKeepOnScreenCondition {
+            !splashViewModel.isReady.value
+        }
+
         enableEdgeToEdge(
             statusBarStyle = androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
             navigationBarStyle = androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
         )
 
-        // Ensure the splash screen stays visible for at least 1.5 seconds
-        var isMinimumTimePassed = false
-        lifecycleScope.launch {
-            delay(1500)
-            isMinimumTimePassed = true
-        }
-        
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-            val splashScreen = installSplashScreen()
-            // Do not dismiss until both the minimum time has passed AND the required data is loaded
-            splashScreen.setKeepOnScreenCondition { 
-                !isMinimumTimePassed || !viewModel.isInitialLoadComplete.value 
-            }
-            
-            // Override the default Android zoom-out with a smooth, cinematic crossfade
-            splashScreen.setOnExitAnimationListener { splashScreenView ->
-                val fadeOut = android.animation.ObjectAnimator.ofFloat(
-                    splashScreenView.view,
-                    android.view.View.ALPHA,
-                    1f,
-                    0f
-                )
-                fadeOut.duration = 600L // Smooth 600ms fade
-                fadeOut.doOnEnd { splashScreenView.remove() }
-                fadeOut.start()
-            }
-        }
-        
-        requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
-        setTheme(R.style.Theme_GoldSilverLiveCalc)
         super.onCreate(savedInstanceState)
         actionBar?.hide()
-        
+
         WindowCompat.setDecorFitsSystemWindows(window, false)
         val insetsController = WindowCompat.getInsetsController(window, window.decorView)
         insetsController.isAppearanceLightStatusBars = false
         insetsController.isAppearanceLightNavigationBars = false
-        
-        // On Android 11 and below, manually delay the first frame draw to hold the legacy splash screen
-        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S) {
-            val content = findViewById<android.view.View>(android.R.id.content)
-            content.viewTreeObserver.addOnPreDrawListener(
-                object : android.view.ViewTreeObserver.OnPreDrawListener {
-                    override fun onPreDraw(): Boolean {
-                        return if (isMinimumTimePassed && viewModel.isInitialLoadComplete.value) {
-                            content.viewTreeObserver.removeOnPreDrawListener(this)
-                            true
-                        } else {
-                            false
-                        }
-                    }
-                }
-            )
-        }
 
         setContent {
             val language by viewModel.language.collectAsStateWithLifecycle()
@@ -108,9 +72,23 @@ class MainActivity : ComponentActivity() {
                 GoldSilverLiveCalcTheme {
                     val navController = rememberNavController()
                     val context = LocalContext.current
+                    val isReduced = remember { isReducedMotion(context) }
+                    var isSplashContinuationVisible by remember { mutableStateOf(true) }
 
-                    val navBackStackEntry by navController.currentBackStackEntryAsState()
-                    val currentRoute = navBackStackEntry?.destination?.route ?: "dashboard"
+                    LaunchedEffect(Unit) {
+                        val startTime = System.currentTimeMillis()
+                        while (!viewModel.isInitialLoadComplete.value && (System.currentTimeMillis() - startTime) < 800L) {
+                            delay(50L)
+                        }
+                        if (!isReduced) {
+                            delay(150L)
+                        }
+                        isSplashContinuationVisible = false
+                    }
+
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        val navBackStackEntry by navController.currentBackStackEntryAsState()
+                        val currentRoute = navBackStackEntry?.destination?.route ?: "dashboard"
 
                 val permissionLauncher = rememberLauncherForActivityResult(
                     contract = ActivityResultContracts.RequestPermission()
@@ -248,8 +226,23 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
+
+                // Branded splash continuation overlay
+                AnimatedVisibility(
+                    visible = isSplashContinuationVisible,
+                    enter = EnterTransition.None,
+                    exit = fadeOut(
+                        animationSpec = tween(
+                            durationMillis = if (isReduced) 0 else 300,
+                            easing = FastOutSlowInEasing
+                        )
+                    )
+                ) {
+                    SplashContent()
+                }
             }
         }
     }
+}
 }
 }

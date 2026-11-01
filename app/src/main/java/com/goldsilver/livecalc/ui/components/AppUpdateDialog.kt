@@ -78,7 +78,7 @@ fun openPlayStoreUpdatePage(context: Context) {
         // Attempt 4: Graceful error handling
         Toast.makeText(
             context,
-            "Please open Google Play Store to update Gold & Silver Live Calc.",
+            "Please open Google Play Store to update Gold Silver Live Calc.",
             Toast.LENGTH_LONG
         ).show()
     }

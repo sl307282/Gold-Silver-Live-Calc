@@ -28,14 +28,21 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
 
+data class HistoryChartPoint(
+    val timestamp: Long,
+    val price: Double,
+    val dateKey: String = "",
+    val isToday: Boolean = false
+)
+
 @OptIn(ExperimentalTextApi::class)
 @Composable
 fun HistoryLineChart(
-    points: List<Pair<Long, Double>>, // timestamp, price
+    points: List<HistoryChartPoint>,
     isGold: Boolean,
     currency: String,
     modifier: Modifier = Modifier,
-    livePrice: Double? = null,   // today's live rate override for the header
+    livePrice: Double? = null,
     isConvertedAtTodayRate: Boolean = false,
     selectedRange: String = "7D"
 ) {
@@ -51,7 +58,7 @@ fun HistoryLineChart(
         return
     }
 
-    val prices = points.map { it.second }
+    val prices = points.map { it.price }
     val displayPrice = livePrice ?: prices.lastOrNull() ?: 0.0
     val maxPrice = prices.maxOrNull() ?: 0.0
     val minPrice = prices.minOrNull() ?: 0.0
@@ -135,12 +142,13 @@ fun HistoryLineChart(
                                 val position = change.position
                                 val width = size.width
                                 val numPoints = points.size
-                                if (numPoints > 1 && width > 0f) {
-                                    // Reserve margin for Y-axis amount labels (approx 60dp)
-                                    val approxYMargin = 60.dp.toPx()
-                                    val usableChartWidth = (width - approxYMargin).coerceAtLeast(40f)
-                                    val spacing = usableChartWidth / (numPoints - 1)
-                                    selectedIndex = (position.x / spacing).roundToInt().coerceIn(0, numPoints - 1)
+                                val plotLeft = 8.dp.toPx()
+                                val approxRightPadding = 72.dp.toPx()
+                                val plotWidth = (width - plotLeft - approxRightPadding).coerceAtLeast(40f)
+                                if (numPoints > 1 && plotWidth > 0f) {
+                                    val touchX = (position.x - plotLeft).coerceIn(0f, plotWidth)
+                                    val spacing = plotWidth / (numPoints - 1)
+                                    selectedIndex = (touchX / spacing).roundToInt().coerceIn(0, numPoints - 1)
                                 } else if (numPoints == 1) {
                                     selectedIndex = 0
                                 }
@@ -175,8 +183,15 @@ fun HistoryLineChart(
             )
 
             val maxLabelWidth = maxOf(maxTextResult.size.width, midTextResult.size.width, minTextResult.size.width)
-            val yAxisWidth = (maxLabelWidth + 12.dp.toPx()).coerceAtLeast(48.dp.toPx())
-            val chartWidth = (width - yAxisWidth).coerceAtLeast(50f)
+            val yAxisWidth = maxLabelWidth + 6.dp.toPx()
+
+            // Inset plot so line and HIGH/LOW pills never overlap right-axis labels
+            val plotLeft = 10.dp.toPx()
+            val plotGap = 16.dp.toPx() // generous buffer between plot line/pills and y-axis text
+            val plotRight = (width - yAxisWidth - plotGap).coerceAtLeast(plotLeft + 40f)
+            val plotWidth = plotRight - plotLeft
+
+            val yAxisLabelX = (plotRight + plotGap).coerceAtMost(width - maxLabelWidth)
 
             // Draw 3 horizontal gridlines with amount labels in selected currency
             val gridColor = if (isSystemDarkThemeGlobal) Color(0xFF2C2C2C) else Color(0xFFE5E5EA)
@@ -193,45 +208,45 @@ fun HistoryLineChart(
             // Gridline 1: Max
             drawLine(
                 color = gridColor,
-                start = Offset(0f, yGridMax),
-                end = Offset(chartWidth, yGridMax),
+                start = Offset(plotLeft, yGridMax),
+                end = Offset(plotRight + 8.dp.toPx(), yGridMax),
                 strokeWidth = 1f,
                 pathEffect = gridStroke.pathEffect
             )
             drawText(
                 textLayoutResult = maxTextResult,
-                topLeft = Offset(chartWidth + 6.dp.toPx(), (yGridMax - maxTextResult.size.height / 2f).coerceIn(0f, chartHeight - maxTextResult.size.height))
+                topLeft = Offset(yAxisLabelX, (yGridMax - maxTextResult.size.height / 2f).coerceIn(0f, chartHeight - maxTextResult.size.height))
             )
 
             // Gridline 2: Mid
             drawLine(
                 color = gridColor,
-                start = Offset(0f, yGridMid),
-                end = Offset(chartWidth, yGridMid),
+                start = Offset(plotLeft, yGridMid),
+                end = Offset(plotRight + 8.dp.toPx(), yGridMid),
                 strokeWidth = 1f,
                 pathEffect = gridStroke.pathEffect
             )
             drawText(
                 textLayoutResult = midTextResult,
-                topLeft = Offset(chartWidth + 6.dp.toPx(), (yGridMid - midTextResult.size.height / 2f).coerceIn(0f, chartHeight - midTextResult.size.height))
+                topLeft = Offset(yAxisLabelX, (yGridMid - midTextResult.size.height / 2f).coerceIn(0f, chartHeight - midTextResult.size.height))
             )
 
             // Gridline 3: Min
             drawLine(
                 color = gridColor,
-                start = Offset(0f, yGridMin),
-                end = Offset(chartWidth, yGridMin),
+                start = Offset(plotLeft, yGridMin),
+                end = Offset(plotRight + 8.dp.toPx(), yGridMin),
                 strokeWidth = 1f,
                 pathEffect = gridStroke.pathEffect
             )
             drawText(
                 textLayoutResult = minTextResult,
-                topLeft = Offset(chartWidth + 6.dp.toPx(), (yGridMin - minTextResult.size.height / 2f).coerceIn(0f, chartHeight - minTextResult.size.height))
+                topLeft = Offset(yAxisLabelX, (yGridMin - minTextResult.size.height / 2f).coerceIn(0f, chartHeight - minTextResult.size.height))
             )
 
             if (numPoints == 1) {
                 val point = points.first()
-                val centerX = chartWidth / 2f
+                val centerX = plotLeft + plotWidth / 2f
                 val centerY = chartHeight / 2f
 
                 drawCircle(
@@ -245,8 +260,7 @@ fun HistoryLineChart(
                     center = Offset(centerX, centerY)
                 )
 
-                val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
-                val dateText = dateFormat.format(Date(point.first))
+                val dateText = if (point.isToday) strings.today else SimpleDateFormat("dd MMM", Locale.getDefault()).format(Date(point.timestamp))
                 val dateTextResult = textMeasurer.measure(
                     text = AnnotatedString(dateText),
                     style = TextStyle(color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Medium)
@@ -258,11 +272,11 @@ fun HistoryLineChart(
                 return@Canvas
             }
 
-            // Map points to screen coordinates
-            val screenPoints = points.mapIndexed { index, pair ->
-                val x = index * (chartWidth / (numPoints - 1))
+            // Map points to screen coordinates within [plotLeft, plotRight]
+            val screenPoints = points.mapIndexed { index, point ->
+                val x = plotLeft + index * (plotWidth / (numPoints - 1))
                 val rawY = if (graphMax > graphMin) {
-                    (chartHeight - ((pair.second - graphMin) / (graphMax - graphMin) * chartHeight)).toFloat()
+                    (chartHeight - ((point.price - graphMin) / (graphMax - graphMin) * chartHeight)).toFloat()
                 } else {
                     chartHeight / 2f
                 }
@@ -313,7 +327,7 @@ fun HistoryLineChart(
                 style = Stroke(width = 5.5f, cap = StrokeCap.Round, join = StrokeJoin.Round)
             )
 
-            // Draw date labels on X-axis: all 7 for 7D, at least 4 evenly spaced for 30D and 1Y
+            // Draw date labels on X-axis: deduplicated, no repeats, final point labelled "Today" if current rate
             val dateFormat = SimpleDateFormat("dd MMM", Locale.getDefault())
             val labelIndices = if (numPoints <= 7) {
                 // All points for 7D
@@ -326,18 +340,23 @@ fun HistoryLineChart(
 
             labelIndices.forEach { index ->
                 if (index in 0 until numPoints) {
-                    val x = index * (chartWidth / (numPoints - 1))
-                    val dateText = dateFormat.format(Date(points[index].first))
+                    val x = screenPoints[index].x
+                    val point = points[index]
+                    val dateText = if (point.isToday) {
+                        strings.today
+                    } else {
+                        dateFormat.format(Date(point.timestamp))
+                    }
                     val dateTextLayoutResult = textMeasurer.measure(
                         text = AnnotatedString(dateText),
                         style = TextStyle(
-                            color = TextMuted,
+                            color = if (point.isToday) lineColor else TextMuted,
                             fontSize = if (numPoints <= 7) 9.sp else 10.sp,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = if (point.isToday) FontWeight.Bold else FontWeight.Medium
                         )
                     )
                     val labelW = dateTextLayoutResult.size.width
-                    val labelX = (x - labelW / 2f).coerceIn(0f, chartWidth - labelW)
+                    val labelX = (x - labelW / 2f).coerceIn(0f, plotRight - labelW / 2f)
                     val labelY = chartHeight + (labelHeight - dateTextLayoutResult.size.height) / 2f
                     drawText(
                         textLayoutResult = dateTextLayoutResult,
@@ -346,7 +365,7 @@ fun HistoryLineChart(
                 }
             }
 
-            // Highlight High & Low points with offset capsule badges so they never overlap the line
+            // Highlight High & Low points with offset capsule badges strictly inset to never overlap labels
             if (animationProgress.value == 1f && maxIndex != minIndex) {
                 // High Point
                 val highOffset = screenPoints[maxIndex]
@@ -362,7 +381,7 @@ fun HistoryLineChart(
                 val padV = 2.dp.toPx()
                 val highBadgeW = highTextResult.size.width + padH * 2f
                 val highBadgeH = highTextResult.size.height + padV * 2f
-                val highBadgeX = (highOffset.x - highBadgeW / 2f).coerceIn(0f, chartWidth - highBadgeW)
+                val highBadgeX = (highOffset.x - highBadgeW / 2f).coerceIn(plotLeft, plotRight - highBadgeW)
                 val highBadgeY = (highOffset.y - highBadgeH - 8.dp.toPx()).let {
                     if (it < 0f) highOffset.y + 10.dp.toPx() else it
                 }
@@ -397,7 +416,7 @@ fun HistoryLineChart(
                 )
                 val lowBadgeW = lowTextResult.size.width + padH * 2f
                 val lowBadgeH = lowTextResult.size.height + padV * 2f
-                val lowBadgeX = (lowOffset.x - lowBadgeW / 2f).coerceIn(0f, chartWidth - lowBadgeW)
+                val lowBadgeX = (lowOffset.x - lowBadgeW / 2f).coerceIn(plotLeft, plotRight - lowBadgeW)
                 val lowBadgeY = (lowOffset.y + 10.dp.toPx()).let {
                     if (it + lowBadgeH > chartHeight) lowOffset.y - lowBadgeH - 8.dp.toPx() else it
                 }
@@ -436,11 +455,11 @@ fun HistoryLineChart(
                         pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f), 0f)
                     )
 
-                    // Horizontal crosshair
+                    // Horizontal crosshair within plot bounds
                     drawLine(
                         color = TextMuted.copy(alpha = 0.35f),
-                        start = Offset(0f, selectedOffset.y),
-                        end = Offset(chartWidth, selectedOffset.y),
+                        start = Offset(plotLeft, selectedOffset.y),
+                        end = Offset(plotRight, selectedOffset.y),
                         strokeWidth = 1.5f,
                         pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f), 0f)
                     )
@@ -459,13 +478,14 @@ fun HistoryLineChart(
 
                     // Difference vs previous day in selected period
                     val prevPoint = if (index > 0) points[index - 1] else null
-                    val diff = prevPoint?.let { selectedPoint.second - it.second }
-                    val diffPercent = if (prevPoint != null && prevPoint.second > 0) {
-                        ((selectedPoint.second - prevPoint.second) / prevPoint.second) * 100.0
+                    val diff = prevPoint?.let { selectedPoint.price - it.price }
+                    val diffPercent = if (prevPoint != null && prevPoint.price > 0) {
+                        ((selectedPoint.price - prevPoint.price) / prevPoint.price) * 100.0
                     } else null
 
-                    val tooltipDate = SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(selectedPoint.first))
-                    val tooltipRate = PriceConverter.format(selectedPoint.second, currency, perGram = true)
+                    val dateBaseStr = SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(selectedPoint.timestamp))
+                    val tooltipDate = if (selectedPoint.isToday) "${strings.today} • $dateBaseStr" else dateBaseStr
+                    val tooltipRate = PriceConverter.format(selectedPoint.price, currency, perGram = true)
 
                     val dateResult = textMeasurer.measure(
                         text = AnnotatedString(tooltipDate),
@@ -482,10 +502,10 @@ fun HistoryLineChart(
                         val formattedDiff = PriceConverter.formatAmount(kotlin.math.abs(diff), currency)
                         val formattedPercent = String.format(Locale.US, "%.2f", kotlin.math.abs(diffPercent))
                         if (diff > 0.001) {
-                            changeString = "+$formattedDiff (▲ +$formattedPercent%)"
+                            changeString = "▲ $formattedDiff ($formattedPercent%)"
                             changeColor = AccentGreen
                         } else if (diff < -0.001) {
-                            changeString = "-$formattedDiff (▼ $formattedPercent%)"
+                            changeString = "▼ $formattedDiff ($formattedPercent%)"
                             changeColor = AccentRed
                         } else {
                             changeString = "0.00 (0.00%)"
@@ -505,9 +525,9 @@ fun HistoryLineChart(
                     val boxWidth = maxOf(dateResult.size.width, rateResult.size.width, changeResult.size.width) + tooltipPadding * 2f
                     val boxHeight = dateResult.size.height + rateResult.size.height + changeResult.size.height + tooltipPadding * 2f
 
-                    // Calculate Tooltip Position
+                    // Calculate Tooltip Position strictly within plot bounds
                     var boxX = selectedOffset.x - boxWidth / 2f
-                    boxX = boxX.coerceIn(0f, chartWidth - boxWidth)
+                    boxX = boxX.coerceIn(plotLeft, plotRight - boxWidth)
 
                     var boxY = selectedOffset.y - boxHeight - 20f
                     if (boxY < 0f) {

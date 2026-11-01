@@ -137,9 +137,10 @@ class HistoricalTrendsTest {
         val inrRange = inrPrices.maxOrNull()!! - inrPrices.minOrNull()!!
         val eurRange = eurPrices.maxOrNull()!! - eurPrices.minOrNull()!!
 
-        assertEquals(PriceConverter.formatAmount(usdRange, "USD"), "$8.00")
-        assertEquals(PriceConverter.formatAmount(inrRange, "INR"), PriceConverter.formatAmount(usdRange * inrRatio, "INR"))
-        assertEquals(PriceConverter.formatAmount(eurRange, "EUR"), PriceConverter.formatAmount(usdRange * eurRatio, "EUR"))
+        // Range (High − Low) formatted with / g
+        assertEquals(PriceConverter.format(usdRange, "USD", perGram = true), "$8.00 / g")
+        assertTrue(PriceConverter.format(inrRange, "INR", perGram = true).endsWith(" / g"))
+        assertTrue(PriceConverter.format(eurRange, "EUR", perGram = true).endsWith(" / g"))
 
         val usdAvg = usdPrices.average()
         val inrAvg = inrPrices.average()
@@ -148,6 +149,32 @@ class HistoricalTrendsTest {
         assertEquals(PriceConverter.format(usdAvg, "USD", perGram = true), PriceConverter.format(123.785714, "USD", perGram = true))
         assertEquals(PriceConverter.format(inrAvg, "INR", perGram = true), PriceConverter.format(usdAvg * inrRatio, "INR", perGram = true))
         assertEquals(PriceConverter.format(eurAvg, "EUR", perGram = true), PriceConverter.format(usdAvg * eurRatio, "EUR", perGram = true))
+    }
+
+    @Test
+    fun testChangeFormattingNeverProducesNegativeSignWithArrow() {
+        // Negative change (down)
+        val negativeDiff = -422.92
+        val pct = -2.978
+        val arrowDown = if (negativeDiff < -0.001) "▼" else "▲"
+        val unsignedAmount = PriceConverter.formatAbsolute(negativeDiff, "INR")
+        val unsignedPct = String.format(java.util.Locale.US, "%.2f", kotlin.math.abs(pct))
+        val formattedTodayChange = "$arrowDown $unsignedAmount ($unsignedPct%)"
+
+        assertEquals("▼ ₹422.92 (2.98%)", formattedTodayChange)
+        assertTrue(!formattedTodayChange.contains("-"))
+        assertTrue(formattedTodayChange.startsWith("▼ ₹"))
+
+        // Period Change with / g
+        val periodDiff = -509.61
+        val periodPct = -3.57
+        val periodArrow = if (periodDiff < -0.001) "▼" else "▲"
+        val unsignedPeriodAmount = PriceConverter.format(kotlin.math.abs(periodDiff), "INR", perGram = true)
+        val unsignedPeriodPct = String.format(java.util.Locale.US, "%.2f", kotlin.math.abs(periodPct))
+        val formattedPeriodChange = "$periodArrow $unsignedPeriodAmount ($unsignedPeriodPct%)"
+
+        assertEquals("▼ ₹509.61 / g (3.57%)", formattedPeriodChange)
+        assertTrue(!formattedPeriodChange.contains("-₹"))
     }
 
     @Test

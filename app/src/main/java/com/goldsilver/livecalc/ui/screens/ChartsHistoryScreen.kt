@@ -22,6 +22,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.goldsilver.livecalc.data.local.entities.RateEntity
+import com.goldsilver.livecalc.ui.components.HistoryChartPoint
 import com.goldsilver.livecalc.ui.components.HistoryLineChart
 import com.goldsilver.livecalc.ui.theme.*
 import com.goldsilver.livecalc.ui.viewmodel.GoldSilverViewModel
@@ -30,6 +32,7 @@ import com.goldsilver.livecalc.util.PriceConverter
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,6 +44,9 @@ fun ChartsHistoryScreen(
     val strings = LocalAppStrings.current
     val historicalRates by viewModel.trendsHistoricalRates.collectAsStateWithLifecycle()
     val latestRate by viewModel.latestRate.collectAsStateWithLifecycle()
+    val previousRate by viewModel.previousTradingDayRate.collectAsStateWithLifecycle()
+    val goldChange by viewModel.goldChangePercent.collectAsStateWithLifecycle()
+    val silverChange by viewModel.silverChangePercent.collectAsStateWithLifecycle()
     val selectedCurrency by viewModel.selectedCurrency.collectAsStateWithLifecycle()
     val isConvertedAtTodayRate by viewModel.isConvertedAtTodayRate.collectAsStateWithLifecycle()
     val isPremium by viewModel.isPremium.collectAsStateWithLifecycle()
@@ -49,43 +55,65 @@ fun ChartsHistoryScreen(
     var isGoldSelected by remember { mutableStateOf(true) }
     var selectedRange by remember { mutableStateOf("7D") } // 7D, 30D, 1Y
 
-    // Smooth skeleton transition on period or metal switch
-    var isSwitchingPeriod by remember { mutableStateOf(false) }
-    LaunchedEffect(selectedRange, isGoldSelected, selectedCurrency) {
-        isSwitchingPeriod = true
-        kotlinx.coroutines.delay(180L)
-        isSwitchingPeriod = false
-    }
-
-    // Build chart points: one per calendar day (closing = latest record that day),
-    // then pin today's live rate as the final point so the chart always ends at the current price.
+    // Dedupe the series strictly by calendar date: keep latest record per day;
+    // append/replace today's entry with latest live rate, and label final point "Today"
     val chartPoints = remember(historicalRates, latestRate, isGoldSelected, selectedRange) {
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+            timeZone = TimeZone.getDefault()
+        }
+        val todayStr = dateFormat.format(Date())
 
-        // Group all historical rows by date, pick the latest record per day (= closing rate)
-        val dailyRates = historicalRates
-            .groupBy { dateFormat.format(Date(it.timestamp)) }
-            .map { (_, dayRates) -> dayRates.maxByOrNull { it.timestamp }!! }
-            .sortedBy { it.timestamp }
-            .toMutableList()
+        // Map calendar date key -> latest record of that day
+        val dailyMap = mutableMapOf<String, RateEntity>()
+        historicalRates.forEach { rate ->
+            val key = if (!rate.date.isNullOrBlank() && rate.date.length == 10) {
+                rate.date
+            } else {
+                dateFormat.format(Date(rate.timestamp))
+            }
+            val existing = dailyMap[key]
+            if (existing == null || rate.timestamp >= existing.timestamp) {
+                dailyMap[key] = rate
+            }
+        }
 
-        // Replace or append today's entry with the live latest rate (most accurate current price)
-        val todayStr = dateFormat.format(Date(System.currentTimeMillis()))
+        // Replace or insert today's entry with live rate from repository
+        var hasLiveToday = false
         latestRate?.let { live ->
-            dailyRates.removeAll { dateFormat.format(Date(it.timestamp)) == todayStr }
-            dailyRates.add(live)
-            dailyRates.sortBy { it.timestamp }
+            val liveKey = if (!live.date.isNullOrBlank() && live.date.length == 10) {
+                live.date
+            } else {
+                todayStr
+            }
+            dailyMap[liveKey] = live
+            hasLiveToday = (liveKey == todayStr)
         }
 
-        val mapped = dailyRates.map { rate ->
+        // Chronologically sorted strictly unique calendar days
+        val sortedRates = dailyMap.toSortedMap().values.toList()
+
+        val periodRates = when (selectedRange) {
+            "7D" -> sortedRates.takeLast(7)
+            "30D" -> sortedRates.takeLast(30)
+            else -> sortedRates // 1Y
+        }
+
+        periodRates.mapIndexed { idx, rate ->
             val price = if (isGoldSelected) rate.goldPrice24k else rate.silverPrice
-            rate.timestamp to price
-        }
+            val key = if (!rate.date.isNullOrBlank() && rate.date.length == 10) {
+                rate.date
+            } else {
+                dateFormat.format(Date(rate.timestamp))
+            }
+            val isFinalPoint = (idx == periodRates.size - 1)
+            val isPointToday = (key == todayStr) || (isFinalPoint && hasLiveToday)
 
-        when (selectedRange) {
-            "7D" -> mapped.takeLast(7)
-            "30D" -> mapped.takeLast(30)
-            else -> mapped // 1Y
+            HistoryChartPoint(
+                timestamp = rate.timestamp,
+                price = price,
+                dateKey = key,
+                isToday = isPointToday
+            )
         }
     }
 
@@ -145,53 +173,60 @@ fun ChartsHistoryScreen(
                 .padding(innerPadding)
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(bottom = 36.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Metal Tab Toggle
+            // Gold / Silver Segmented Toggle (Restored above period chips)
             item {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(48.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color.White.copy(alpha = 0.05f))
+                        .height(44.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(DarkSurface)
+                        .border(
+                            width = 1.dp,
+                            color = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.08f),
+                            shape = RoundedCornerShape(10.dp)
+                        )
+                        .padding(3.dp)
                 ) {
                     Box(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(8.dp))
                             .background(if (isGoldSelected) GoldPrimary else Color.Transparent)
                             .clickable { isGoldSelected = true },
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = strings.goldRates,
+                            text = strings.metalGold,
                             style = MaterialTheme.typography.titleSmall,
-                            color = if (isGoldSelected) DarkBackground else TextPrimary,
-                            fontWeight = FontWeight.Bold
+                            color = if (isGoldSelected) DarkBackground else TextSecondary,
+                            fontWeight = if (isGoldSelected) FontWeight.Bold else FontWeight.Medium
                         )
                     }
                     Box(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(8.dp))
                             .background(if (!isGoldSelected) SilverPrimary else Color.Transparent)
                             .clickable { isGoldSelected = false },
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = strings.silverRates,
+                            text = strings.metalSilver,
                             style = MaterialTheme.typography.titleSmall,
-                            color = if (!isGoldSelected) DarkBackground else TextPrimary,
-                            fontWeight = FontWeight.Bold
+                            color = if (!isGoldSelected) DarkBackground else TextSecondary,
+                            fontWeight = if (!isGoldSelected) FontWeight.Bold else FontWeight.Medium
                         )
                     }
                 }
             }
 
-            // Range Selectors
+            // Range Selectors (7D, 30D, 1Y)
             item {
                 val rangeOptions = listOf(
                     "7D" to strings.range7D,
@@ -248,85 +283,22 @@ fun ChartsHistoryScreen(
                 }
             }
 
-            // Trend Chart Container with Skeleton Loading Support
+            // Trend Chart Container
             item {
                 val isRangeLocked = selectedRange == "1Y" && !isPremium
 
-                if (isSwitchingPeriod && chartPoints.isNotEmpty()) {
-                    TrendsSkeletonLoader()
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(310.dp)
-                    ) {
-                        if (isRangeLocked) {
-                            // Blurred canvas representation
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .blur(8.dp)
-                            ) {
-                                HistoryLineChart(
-                                    points = chartPoints,
-                                    isGold = isGoldSelected,
-                                    currency = selectedCurrency,
-                                    modifier = Modifier.fillMaxSize(),
-                                    livePrice = if (isGoldSelected) latestRate?.goldPrice24k else latestRate?.silverPrice,
-                                    isConvertedAtTodayRate = isConvertedAtTodayRate,
-                                    selectedRange = selectedRange
-                                )
-                            }
-
-                            // Overlay Paywall
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(Color.Black.copy(alpha = 0.6f)),
-                                colors = CardDefaults.cardColors(containerColor = Color.Transparent)
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(24.dp),
-                                    verticalArrangement = Arrangement.Center,
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Lock,
-                                        contentDescription = strings.premiumFeature,
-                                        tint = GoldPrimary,
-                                        modifier = Modifier.size(44.dp)
-                                    )
-                                    Spacer(modifier = Modifier.height(12.dp))
-                                    Text(
-                                        text = strings.premiumFeature,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = TextPrimary,
-                                        fontWeight = FontWeight.Bold,
-                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                    )
-                                    Text(
-                                        text = strings.unlockTrendsDesc,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = TextSecondary,
-                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                        modifier = Modifier.padding(vertical = 8.dp)
-                                    )
-                                    Button(
-                                        onClick = { viewModel.setPremium(true) },
-                                        colors = ButtonDefaults.buttonColors(containerColor = GoldPrimary)
-                                    ) {
-                                        Text(
-                                            text = strings.upgradeToPremium,
-                                            style = MaterialTheme.typography.labelLarge,
-                                            color = DarkBackground,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-                            }
-                        } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(310.dp)
+                ) {
+                    if (isRangeLocked) {
+                        // Blurred canvas representation
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .blur(8.dp)
+                        ) {
                             HistoryLineChart(
                                 points = chartPoints,
                                 isGold = isGoldSelected,
@@ -337,39 +309,102 @@ fun ChartsHistoryScreen(
                                 selectedRange = selectedRange
                             )
                         }
+
+                        // Overlay Paywall
+                        Card(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.6f)),
+                            colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(24.dp),
+                                verticalArrangement = Arrangement.Center,
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = strings.premiumFeature,
+                                    tint = GoldPrimary,
+                                    modifier = Modifier.size(44.dp)
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    text = strings.premiumFeature,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = TextPrimary,
+                                    fontWeight = FontWeight.Bold,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
+                                Text(
+                                    text = strings.unlockTrendsDesc,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextSecondary,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                    modifier = Modifier.padding(vertical = 8.dp)
+                                )
+                                Button(
+                                    onClick = { viewModel.setPremium(true) },
+                                    colors = ButtonDefaults.buttonColors(containerColor = GoldPrimary)
+                                ) {
+                                    Text(
+                                        text = strings.upgradeToPremium,
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = DarkBackground,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        HistoryLineChart(
+                            points = chartPoints,
+                            isGold = isGoldSelected,
+                            currency = selectedCurrency,
+                            modifier = Modifier.fillMaxSize(),
+                            livePrice = if (isGoldSelected) latestRate?.goldPrice24k else latestRate?.silverPrice,
+                            isConvertedAtTodayRate = isConvertedAtTodayRate,
+                            selectedRange = selectedRange
+                        )
                     }
                 }
             }
 
-            // Stat Summary Card
+            // Stat Summary Card (Title follows the Gold / Silver toggle)
             item {
-                if (chartPoints.isNotEmpty() && !isSwitchingPeriod) {
-                    val prices = chartPoints.map { it.second }
+                if (chartPoints.isNotEmpty()) {
+                    val prices = chartPoints.map { it.price }
                     val maxPrice = prices.maxOrNull() ?: 0.0
                     val minPrice = prices.minOrNull() ?: 0.0
                     val avgPrice = prices.average()
                     val metalName = if (isGoldSelected) strings.metalGold else strings.metalSilver
 
-                    // Today's Change calculation
-                    val todayPrice = if (isGoldSelected) latestRate?.goldPrice24k else latestRate?.silverPrice
-                    val prevPrice = (if (isGoldSelected) latestRate?.prevTradingDayGoldPrice else latestRate?.prevTradingDaySilverPrice)
-                        ?: if (chartPoints.size >= 2) chartPoints[chartPoints.size - 2].second else null
+                    // Today's Change = currentRate − previousClose from the rates repository (same source as the home screen)
+                    val currentRate = if (isGoldSelected) latestRate?.goldPrice24k else latestRate?.silverPrice
+                    val previousClose = if (isGoldSelected) {
+                        latestRate?.prevTradingDayGoldPrice ?: previousRate?.goldPrice24k
+                    } else {
+                        latestRate?.prevTradingDaySilverPrice ?: previousRate?.silverPrice
+                    }
+                    val todayChangePercent = if (isGoldSelected) goldChange else silverChange
 
-                    val todayDiff = if (todayPrice != null && prevPrice != null && prevPrice > 0.0) {
-                        todayPrice - prevPrice
+                    val todayDiff = if (currentRate != null && previousClose != null && previousClose > 0.0) {
+                        currentRate - previousClose
                     } else null
-                    val todayPercent = if (todayDiff != null && prevPrice != null && prevPrice > 0.0) {
-                        (todayDiff / prevPrice) * 100.0
+                    val todayPercent = todayChangePercent ?: if (todayDiff != null && previousClose != null && previousClose > 0.0) {
+                        (todayDiff / previousClose) * 100.0
                     } else null
 
-                    // Period Change calculation (first point vs last point)
+                    // Period Change (first vs last point)
                     val firstPoint = chartPoints.firstOrNull()
                     val lastPoint = chartPoints.lastOrNull()
                     val periodDiff = if (firstPoint != null && lastPoint != null) {
-                        lastPoint.second - firstPoint.second
+                        lastPoint.price - firstPoint.price
                     } else null
-                    val periodPercent = if (firstPoint != null && lastPoint != null && firstPoint.second > 0.0) {
-                        ((lastPoint.second - firstPoint.second) / firstPoint.second) * 100.0
+                    val periodPercent = if (firstPoint != null && lastPoint != null && firstPoint.price > 0.0) {
+                        ((lastPoint.price - firstPoint.price) / firstPoint.price) * 100.0
                     } else null
 
                     Card(
@@ -396,7 +431,7 @@ fun ChartsHistoryScreen(
                             )
                             HorizontalDivider(color = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.08f))
 
-                            // 1. Today's Change (e.g. "Today's Change ▼ ₹423.10 (2.98%) vs yesterday")
+                            // 1. Today's Change: arrow + unsigned amount + unsigned %: "▼ ₹422.92 (2.98%)"
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -404,28 +439,19 @@ fun ChartsHistoryScreen(
                             ) {
                                 Text(strings.todaysChange, style = MaterialTheme.typography.bodyMedium, color = TextSecondary)
                                 if (todayDiff != null && todayPercent != null) {
-                                    val formattedAmount = PriceConverter.formatAmount(kotlin.math.abs(todayDiff), selectedCurrency)
-                                    val formattedPercent = String.format(Locale.US, "%.2f", kotlin.math.abs(todayPercent))
-                                    when {
-                                        todayDiff > 0.001 -> Text(
-                                            text = "▲ $formattedAmount ($formattedPercent%) ${strings.vsYesterday}",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = AccentGreen,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        todayDiff < -0.001 -> Text(
-                                            text = "▼ $formattedAmount ($formattedPercent%) ${strings.vsYesterday}",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = AccentRed,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        else -> Text(
-                                            text = "0.00 (0.00%) ${strings.vsYesterday}",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = TextMuted,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
+                                    val isUp = todayDiff > 0.001
+                                    val isDown = todayDiff < -0.001
+                                    val arrow = if (isUp) "▲" else if (isDown) "▼" else ""
+                                    val color = if (isUp) AccentGreen else if (isDown) AccentRed else TextMuted
+                                    val unsignedAmount = PriceConverter.formatAbsolute(todayDiff, selectedCurrency)
+                                    val unsignedPercent = String.format(Locale.US, "%.2f", kotlin.math.abs(todayPercent))
+
+                                    Text(
+                                        text = "$arrow $unsignedAmount ($unsignedPercent%)",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = color,
+                                        fontWeight = FontWeight.Bold
+                                    )
                                 } else {
                                     Text("—", style = MaterialTheme.typography.bodyMedium, color = TextMuted)
                                 }
@@ -433,7 +459,7 @@ fun ChartsHistoryScreen(
 
                             HorizontalDivider(color = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.04f) else Color.Black.copy(alpha = 0.05f))
 
-                            // 2. Period Change (first vs last point)
+                            // 2. Period Change: arrow + unsigned amount with / g + unsigned %: "▼ ₹509.61 / g (3.57%)"
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -441,28 +467,19 @@ fun ChartsHistoryScreen(
                             ) {
                                 Text(strings.periodChange, style = MaterialTheme.typography.bodyMedium, color = TextSecondary)
                                 if (periodDiff != null && periodPercent != null) {
-                                    val formattedAmount = PriceConverter.formatAmount(kotlin.math.abs(periodDiff), selectedCurrency)
-                                    val formattedPercent = String.format(Locale.US, "%.2f", kotlin.math.abs(periodPercent))
-                                    when {
-                                        periodDiff > 0.001 -> Text(
-                                            text = "▲ +$formattedAmount (+$formattedPercent%)",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = AccentGreen,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        periodDiff < -0.001 -> Text(
-                                            text = "▼ -$formattedAmount (-$formattedPercent%)",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = AccentRed,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        else -> Text(
-                                            text = "0.00 (0.00%)",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = TextMuted,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
+                                    val isPeriodUp = periodDiff > 0.001
+                                    val isPeriodDown = periodDiff < -0.001
+                                    val arrow = if (isPeriodUp) "▲" else if (isPeriodDown) "▼" else ""
+                                    val color = if (isPeriodUp) AccentGreen else if (isPeriodDown) AccentRed else TextMuted
+                                    val unsignedAmount = PriceConverter.format(kotlin.math.abs(periodDiff), selectedCurrency, perGram = true)
+                                    val unsignedPercent = String.format(Locale.US, "%.2f", kotlin.math.abs(periodPercent))
+
+                                    Text(
+                                        text = "$arrow $unsignedAmount ($unsignedPercent%)",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = color,
+                                        fontWeight = FontWeight.Bold
+                                    )
                                 } else {
                                     Text("—", style = MaterialTheme.typography.bodyMedium, color = TextMuted)
                                 }
@@ -470,7 +487,7 @@ fun ChartsHistoryScreen(
 
                             HorizontalDivider(color = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.04f) else Color.Black.copy(alpha = 0.05f))
 
-                            // 3. Range (High − Low in neutral white)
+                            // 3. Range labelled "Range (High − Low)" in neutral white with / g
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -478,7 +495,7 @@ fun ChartsHistoryScreen(
                             ) {
                                 Text(strings.range, style = MaterialTheme.typography.bodyMedium, color = TextSecondary)
                                 Text(
-                                    text = PriceConverter.formatAmount(maxPrice - minPrice, selectedCurrency),
+                                    text = PriceConverter.format(maxPrice - minPrice, selectedCurrency, perGram = true),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = TextPrimary,
                                     fontWeight = FontWeight.SemiBold
@@ -487,7 +504,7 @@ fun ChartsHistoryScreen(
 
                             HorizontalDivider(color = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.04f) else Color.Black.copy(alpha = 0.05f))
 
-                            // 4. Highest Rate (Neutral white)
+                            // 4. Highest Rate (Neutral white with / g)
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -504,7 +521,7 @@ fun ChartsHistoryScreen(
 
                             HorizontalDivider(color = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.04f) else Color.Black.copy(alpha = 0.05f))
 
-                            // 5. Lowest Rate (Neutral white)
+                            // 5. Lowest Rate (Neutral white with / g)
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -521,7 +538,7 @@ fun ChartsHistoryScreen(
 
                             HorizontalDivider(color = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.04f) else Color.Black.copy(alpha = 0.05f))
 
-                            // 6. Average Price (Neutral white)
+                            // 6. Average Price (Neutral white with / g)
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -540,9 +557,9 @@ fun ChartsHistoryScreen(
                 }
             }
 
-            // Daily Rates List
+            // Daily Rates List (Renders below summary with bottom-nav padding)
             item {
-                if (chartPoints.isNotEmpty() && !isSwitchingPeriod) {
+                if (chartPoints.isNotEmpty()) {
                     val reverseDailyList = chartPoints.asReversed()
                     val dailyDateFormat = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
 
@@ -602,12 +619,12 @@ fun ChartsHistoryScreen(
                             HorizontalDivider(color = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.03f) else Color.Black.copy(alpha = 0.04f))
 
                             // Rows for each day in selected period (reverse chronological)
-                            reverseDailyList.forEachIndexed { revIdx, (timestamp, price) ->
+                            reverseDailyList.forEachIndexed { revIdx, pt ->
                                 val origIdx = chartPoints.size - 1 - revIdx
-                                val prevPrice = if (origIdx > 0) chartPoints[origIdx - 1].second else null
-                                val diff = prevPrice?.let { price - it }
+                                val prevPrice = if (origIdx > 0) chartPoints[origIdx - 1].price else null
+                                val diff = prevPrice?.let { pt.price - it }
                                 val diffPercent = if (prevPrice != null && prevPrice > 0.0) {
-                                    ((price - prevPrice) / prevPrice) * 100.0
+                                    ((pt.price - prevPrice) / prevPrice) * 100.0
                                 } else null
 
                                 Row(
@@ -617,14 +634,16 @@ fun ChartsHistoryScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
+                                    val dateStr = dailyDateFormat.format(Date(pt.timestamp))
                                     Text(
-                                        text = dailyDateFormat.format(Date(timestamp)),
+                                        text = if (pt.isToday) "${strings.today} • $dateStr" else dateStr,
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = TextSecondary,
+                                        color = if (pt.isToday) (if (isGoldSelected) GoldPrimary else SilverPrimary) else TextSecondary,
+                                        fontWeight = if (pt.isToday) FontWeight.Bold else FontWeight.Normal,
                                         modifier = Modifier.weight(1.1f)
                                     )
                                     Text(
-                                        text = PriceConverter.format(price, selectedCurrency, perGram = true),
+                                        text = PriceConverter.format(pt.price, selectedCurrency, perGram = true),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = TextPrimary,
                                         fontWeight = FontWeight.Medium,
@@ -679,59 +698,8 @@ fun ChartsHistoryScreen(
             }
 
             item {
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(24.dp))
             }
-        }
-    }
-}
-
-@Composable
-private fun TrendsSkeletonLoader(
-    modifier: Modifier = Modifier
-) {
-    val infiniteTransition = rememberInfiniteTransition(label = "skeleton_shimmer")
-    val alpha by infiniteTransition.animateFloat(
-        initialValue = 0.05f,
-        targetValue = 0.16f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(700, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "skeleton_alpha"
-    )
-
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // Chart skeleton
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(310.dp),
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = DarkSurface)
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.White.copy(alpha = alpha))
-            )
-        }
-
-        // Summary skeleton
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(200.dp),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = DarkSurface)
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.White.copy(alpha = alpha))
-            )
         }
     }
 }

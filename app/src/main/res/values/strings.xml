@@ -37,7 +37,8 @@
 
     <!-- Historical Trends -->
     <string name="period_change">Period Change</string>
-    <string name="range">Range</string>
+    <string name="range">Range (High − Low)</string>
+    <string name="today">Today</string>
     <string name="daily_rates">Daily Rates</string>
     <string name="converted_at_today_rate">Converted at today\'s rate</string>
     <string name="date_header">Date</string>

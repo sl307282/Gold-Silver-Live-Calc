@@ -53,31 +53,12 @@ fun HomeDashboardScreen(
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     val currency by viewModel.currency.collectAsStateWithLifecycle()
     val isPremium by viewModel.isPremium.collectAsStateWithLifecycle()
-    val usdRate by viewModel.usdRate.collectAsStateWithLifecycle()
 
     val lastUpdatedText = remember(latestRate) {
         latestRate?.let {
             val sdf = SimpleDateFormat("dd MMM yyyy, h:mm a", Locale.getDefault())
             sdf.format(Date(it.timestamp))
         } ?: "..."
-    }
-
-    // Market Snapshot figures
-    val usdInrText = remember(latestRate, usdRate) {
-        val inrGold = latestRate?.goldPrice24k ?: 13777.65
-        val usdGold = usdRate?.goldPrice24k ?: 124.61
-        val calculatedUsdInr = if (usdGold > 0) (inrGold / usdGold) / 1.25 else 88.45
-        String.format(Locale.US, "₹%.2f", calculatedUsdInr)
-    }
-
-    val goldUsdOzText = remember(usdRate) {
-        val goldOz = (usdRate?.goldPrice24k ?: 124.61) * 31.1035
-        String.format(Locale.US, "$%,.2f", goldOz)
-    }
-
-    val silverUsdOzText = remember(usdRate) {
-        val silverOz = (usdRate?.silverPrice ?: 1.58) * 31.1035
-        String.format(Locale.US, "$%,.2f", silverOz)
     }
 
     Scaffold(
@@ -316,28 +297,6 @@ fun HomeDashboardScreen(
                             )
                         }
                     }
-                }
-
-                item {
-                    Spacer(modifier = Modifier.height(4.dp))
-                }
-
-                // Market Snapshot Row
-                item {
-                    Text(
-                        text = strings.marketSnapshot.uppercase(),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TextMuted,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-
-                    MarketSnapshotCard(
-                        usdInr = usdInrText,
-                        goldUsdOz = goldUsdOzText,
-                        silverUsdOz = silverUsdOzText
-                    )
                 }
 
                 item {
@@ -673,131 +632,6 @@ fun QuickActionButton(
                 tint = subtitleColor.copy(alpha = 0.8f),
                 modifier = Modifier.size(chevronSize)
             )
-        }
-    }
-}
-
-@Composable
-fun MarketSnapshotCard(
-    usdInr: String,
-    goldUsdOz: String,
-    silverUsdOz: String,
-    modifier: Modifier = Modifier
-) {
-    val cardBrush = if (isSystemDarkThemeGlobal) {
-        Brush.linearGradient(colors = listOf(DarkSurface, Color(0xFF1E2028)))
-    } else {
-        Brush.linearGradient(colors = listOf(Color(0xFFFFFFFF), Color(0xFFF8FAFC)))
-    }
-
-    val cardBorderColor = if (isSystemDarkThemeGlobal) {
-        Color.White.copy(alpha = 0.1f)
-    } else {
-        Color.Black.copy(alpha = 0.08f)
-    }
-
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .border(
-                width = 0.5.dp,
-                color = cardBorderColor,
-                shape = RoundedCornerShape(16.dp)
-            ),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (!isSystemDarkThemeGlobal) 1.5.dp else 0.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(brush = cardBrush)
-                .padding(vertical = 12.dp, horizontal = 6.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Col 1: USD/INR
-            Column(
-                modifier = Modifier.weight(1f),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "USD / INR",
-                    color = TextMuted,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 11.sp
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = usdInr,
-                    color = TextPrimary,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.5.sp
-                )
-            }
-
-            // Divider 1
-            Box(
-                modifier = Modifier
-                    .width(1.dp)
-                    .height(28.dp)
-                    .background(if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.08f))
-            )
-
-            // Col 2: Gold USD/oz
-            Column(
-                modifier = Modifier.weight(1f),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "Gold USD/oz",
-                    color = GoldPrimary,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 11.sp
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = goldUsdOz,
-                    color = TextPrimary,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.5.sp
-                )
-            }
-
-            // Divider 2
-            Box(
-                modifier = Modifier
-                    .width(1.dp)
-                    .height(28.dp)
-                    .background(if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.08f))
-            )
-
-            // Col 3: Silver USD/oz
-            Column(
-                modifier = Modifier.weight(1f),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "Silver USD/oz",
-                    color = SilverPrimary,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 11.sp
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = silverUsdOz,
-                    color = TextPrimary,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.5.sp
-                )
-            }
         }
     }
 }

@@ -30,9 +30,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Brush
 import com.goldsilver.livecalc.data.local.entities.AlertEntity
 import com.goldsilver.livecalc.ui.theme.*
 import com.goldsilver.livecalc.ui.viewmodel.GoldSilverViewModel
+import com.goldsilver.livecalc.util.CurrencyFormatter
 import java.text.SimpleDateFormat
 import java.util.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -51,10 +55,28 @@ fun PriceAlertsScreen(
     val currency by viewModel.currency.collectAsStateWithLifecycle()
     val isPremium by viewModel.isPremium.collectAsStateWithLifecycle()
     val latestRate by viewModel.latestRate.collectAsStateWithLifecycle()
+    val previousRate by viewModel.previousTradingDayRate.collectAsStateWithLifecycle()
+    val goldChange by viewModel.goldChangePercent.collectAsStateWithLifecycle()
+    val silverChange by viewModel.silverChangePercent.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     val currentGoldPrice = latestRate?.goldPrice24k
     val currentSilverPrice = latestRate?.silverPrice
+    val prevGoldPrice = latestRate?.prevTradingDayGoldPrice ?: previousRate?.goldPrice24k
+    val prevSilverPrice = latestRate?.prevTradingDaySilverPrice ?: previousRate?.silverPrice
+
+    val goldDiffAmount = if (currentGoldPrice != null && prevGoldPrice != null && prevGoldPrice > 0) currentGoldPrice - prevGoldPrice else null
+    val silverDiffAmount = if (currentSilverPrice != null && prevSilverPrice != null && prevSilverPrice > 0) currentSilverPrice - prevSilverPrice else null
+
+    val effectiveGoldChange = goldChange ?: if (goldDiffAmount != null && prevGoldPrice != null && prevGoldPrice > 0) (goldDiffAmount / prevGoldPrice) * 100.0 else null
+    val effectiveSilverChange = silverChange ?: if (silverDiffAmount != null && prevSilverPrice != null && prevSilverPrice > 0) (silverDiffAmount / prevSilverPrice) * 100.0 else null
+
+    val lastUpdatedText = remember(latestRate?.timestamp) {
+        latestRate?.timestamp?.let { ts ->
+            val sdf = SimpleDateFormat("dd MMM, h:mm a", Locale.getDefault())
+            sdf.format(Date(ts))
+        } ?: "—"
+    }
 
     // Form states
     var isGold by remember { mutableStateOf(true) }
@@ -96,43 +118,145 @@ fun PriceAlertsScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Live context price card
+            // Live Hero Price Card
             item {
+                val heroCardBrush = if (isSystemDarkThemeGlobal) {
+                    Brush.linearGradient(listOf(DarkSurface, Color(0xFF221E14)))
+                } else {
+                    Brush.linearGradient(listOf(Color(0xFFFFFDF0), Color(0xFFFFF9E6)))
+                }
+                val heroBorderColor = if (isSystemDarkThemeGlobal) {
+                    GoldPrimary.copy(alpha = 0.3f)
+                } else {
+                    GoldPrimary.copy(alpha = 0.35f)
+                }
+                val heroElevation = if (!isSystemDarkThemeGlobal) 3.dp else 0.dp
+
+                val goldAlpha by animateFloatAsState(targetValue = if (isGold) 1f else 0.6f, label = "goldAlpha")
+                val silverAlpha by animateFloatAsState(targetValue = if (!isGold) 1f else 0.6f, label = "silverAlpha")
+
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(16.dp))
                         .border(
                             width = 0.5.dp,
-                            color = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.08f),
-                            shape = RoundedCornerShape(12.dp)
+                            color = heroBorderColor,
+                            shape = RoundedCornerShape(16.dp)
                         ),
-                    colors = CardDefaults.cardColors(containerColor = DarkSurface)
+                    shape = RoundedCornerShape(16.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = heroElevation),
+                    colors = CardDefaults.cardColors(containerColor = Color.Transparent)
                 ) {
-                    Row(
+                    Column(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceAround
+                            .background(brush = heroCardBrush)
+                            .padding(14.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Current Gold (24K)", color = TextSecondary, fontSize = 12.sp)
-                            Text(
-                                text = currentGoldPrice?.let { com.goldsilver.livecalc.util.CurrencyFormatter.formatCurrency(it, currency) } ?: "—",
-                                color = GoldPrimary,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp
-                            )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            // Gold Column
+                            val goldHighlightBg = if (isGold) GoldPrimary.copy(alpha = 0.10f) else Color.Transparent
+                            val goldHighlightBorder = if (isGold) GoldPrimary.copy(alpha = 0.45f) else Color.Transparent
+
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .alpha(goldAlpha)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(goldHighlightBg)
+                                    .border(
+                                        width = 1.dp,
+                                        color = goldHighlightBorder,
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    .clickable { isGold = true }
+                                    .padding(vertical = 10.dp, horizontal = 8.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = strings.gold24k,
+                                    color = TextSecondary,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "${currentGoldPrice?.let { CurrencyFormatter.formatCurrency(it, currency) } ?: "—"} / g",
+                                    color = GoldPrimary,
+                                    style = MaterialTheme.typography.headlineMedium.copy(
+                                        fontSize = 20.sp,
+                                        fontWeight = FontWeight.Bold
+                                    ),
+                                    maxLines = 1
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                MetalPriceChangeText(
+                                    diffAmount = goldDiffAmount,
+                                    changePercent = effectiveGoldChange,
+                                    currency = currency
+                                )
+                            }
+
+                            // Silver Column
+                            val silverHighlightColor = if (isSystemDarkThemeGlobal) Color.White else SilverPrimary
+                            val silverHighlightBg = if (!isGold) silverHighlightColor.copy(alpha = 0.10f) else Color.Transparent
+                            val silverHighlightBorder = if (!isGold) silverHighlightColor.copy(alpha = 0.45f) else Color.Transparent
+
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .alpha(silverAlpha)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(silverHighlightBg)
+                                    .border(
+                                        width = 1.dp,
+                                        color = silverHighlightBorder,
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    .clickable { isGold = false }
+                                    .padding(vertical = 10.dp, horizontal = 8.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = strings.metalSilver,
+                                    color = TextSecondary,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "${currentSilverPrice?.let { CurrencyFormatter.formatCurrency(it, currency) } ?: "—"} / g",
+                                    color = if (isSystemDarkThemeGlobal) Color.White else TextPrimary,
+                                    style = MaterialTheme.typography.headlineMedium.copy(
+                                        fontSize = 20.sp,
+                                        fontWeight = FontWeight.Bold
+                                    ),
+                                    maxLines = 1
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                MetalPriceChangeText(
+                                    diffAmount = silverDiffAmount,
+                                    changePercent = effectiveSilverChange,
+                                    currency = currency
+                                )
+                            }
                         }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Current Silver", color = TextSecondary, fontSize = 12.sp)
-                            Text(
-                                text = currentSilverPrice?.let { com.goldsilver.livecalc.util.CurrencyFormatter.formatCurrency(it, currency) } ?: "—",
-                                color = SilverPrimary,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp
-                            )
-                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+                        HorizontalDivider(
+                            color = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.08f)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = "${strings.lastUpdated} • $lastUpdatedText",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextMuted
+                        )
                     }
                 }
             }
@@ -595,5 +719,39 @@ fun AlertItem(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun MetalPriceChangeText(
+    diffAmount: Double?,
+    changePercent: Double?,
+    currency: String,
+    modifier: Modifier = Modifier
+) {
+    if (diffAmount != null && changePercent != null) {
+        val isUp = diffAmount > 0.001
+        val isDown = diffAmount < -0.001
+        val arrow = if (isUp) "▲" else if (isDown) "▼" else "—"
+        val color = if (isUp) Color(0xFF4ADE80) else if (isDown) Color(0xFFFF6B6B) else TextMuted
+        val absDiff = CurrencyFormatter.formatCurrency(Math.abs(diffAmount), currency)
+        val pctStr = String.format(Locale.US, "%.2f", Math.abs(changePercent))
+
+        Text(
+            text = "$arrow $absDiff · $pctStr%",
+            color = color,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            modifier = modifier
+        )
+    } else {
+        Text(
+            text = "—",
+            color = TextMuted,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            modifier = modifier
+        )
     }
 }

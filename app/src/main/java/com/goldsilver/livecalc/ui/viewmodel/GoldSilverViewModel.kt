@@ -11,10 +11,12 @@ import com.goldsilver.livecalc.data.local.entities.VerificationEntity
 import com.goldsilver.livecalc.ota.OtaResult
 import com.goldsilver.livecalc.ota.OtaState
 import com.goldsilver.livecalc.ota.OtaUpdateManager
+import com.goldsilver.livecalc.util.PriceConverter
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import com.goldsilver.livecalc.ui.theme.isSystemDarkThemeGlobal
 import com.goldsilver.livecalc.ui.theme.selectedThemeGlobal
+import java.util.Locale
 
 class GoldSilverViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -65,6 +67,13 @@ class GoldSilverViewModel(application: Application) : AndroidViewModel(applicati
 
     // Settings States
     val currency = MutableStateFlow(sharedPrefs.getString("currency", "INR") ?: "INR")
+    val selectedCurrency: StateFlow<String> = currency.asStateFlow()
+
+    val isConvertedAtTodayRate: StateFlow<Boolean> = currency.map { curr ->
+        val clean = curr.trim().uppercase(Locale.US)
+        clean !in listOf("INR", "USD")
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     val language = MutableStateFlow(sharedPrefs.getString("language", "English") ?: "English")
     val isNotificationsEnabled = MutableStateFlow(sharedPrefs.getBoolean("notifications_enabled", true))
     val isPremium = MutableStateFlow(true)
@@ -81,6 +90,45 @@ class GoldSilverViewModel(application: Application) : AndroidViewModel(applicati
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val historicalRates: StateFlow<List<RateEntity>> = currency.flatMapLatest { curr ->
         repository.getHistoricalRatesForCurrencyWithFallbackFlow(curr)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val trendsHistoricalRates: StateFlow<List<RateEntity>> = combine(
+        currency,
+        repository.getHistoricalRatesForCurrencyFlow("INR"),
+        repository.getHistoricalRatesForCurrencyFlow("USD"),
+        repository.getHistoricalRatesFlow()
+    ) { curr, inrHistory, usdHistory, anyHistory ->
+        val cleanCurr = curr.trim().uppercase(Locale.US)
+        when (cleanCurr) {
+            "INR" -> {
+                if (inrHistory.isNotEmpty()) {
+                    inrHistory
+                } else if (anyHistory.isNotEmpty()) {
+                    anyHistory.map { com.goldsilver.livecalc.util.CurrencyConverter.convertRateEntity(it, "INR") }
+                } else {
+                    emptyList()
+                }
+            }
+            "USD" -> {
+                if (usdHistory.isNotEmpty()) {
+                    usdHistory
+                } else if (anyHistory.isNotEmpty()) {
+                    anyHistory.map { com.goldsilver.livecalc.util.CurrencyConverter.convertRateEntity(it, "USD") }
+                } else {
+                    emptyList()
+                }
+            }
+            else -> {
+                val baseUsdSeries = if (usdHistory.isNotEmpty()) {
+                    usdHistory
+                } else if (inrHistory.isNotEmpty()) {
+                    inrHistory.map { com.goldsilver.livecalc.util.CurrencyConverter.convertRateEntity(it, "USD") }
+                } else {
+                    anyHistory.map { com.goldsilver.livecalc.util.CurrencyConverter.convertRateEntity(it, "USD") }
+                }
+                baseUsdSeries.map { PriceConverter.convertRateEntityAtTodayFx(it, fromCurrency = "USD", toCurrency = cleanCurr) }
+            }
+        }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // USD Benchmark Rates for Market Snapshot

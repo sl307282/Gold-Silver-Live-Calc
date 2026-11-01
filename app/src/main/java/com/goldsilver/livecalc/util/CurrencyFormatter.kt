@@ -49,11 +49,14 @@ object CurrencyFormatter {
     fun formatCurrency(amount: Double, currency: String, decimalPlaces: Int = 2): String {
         val cleanCurrency = currency.trim().uppercase(Locale.US)
         val symbol = getCurrencySymbol(cleanCurrency)
-        val formattedNumber = formatAmount(amount, cleanCurrency, decimalPlaces)
+        val isNegative = amount < 0
+        val absAmount = kotlin.math.abs(amount)
+        val formattedNumber = formatAmount(absAmount, cleanCurrency, decimalPlaces)
+        val prefix = if (isNegative) "-" else ""
         return if (cleanCurrency == "AED") {
-            "AED $formattedNumber"
+            "${prefix}AED $formattedNumber"
         } else {
-            "$symbol$formattedNumber"
+            "$prefix$symbol$formattedNumber"
         }
     }
 

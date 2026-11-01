@@ -8,27 +8,25 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.input.pointer.pointerInput
-import kotlin.math.roundToInt
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.goldsilver.livecalc.ui.theme.*
+import com.goldsilver.livecalc.util.LocalAppStrings
+import com.goldsilver.livecalc.util.PriceConverter
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalTextApi::class)
 @Composable
@@ -37,16 +35,18 @@ fun HistoryLineChart(
     isGold: Boolean,
     currency: String,
     modifier: Modifier = Modifier,
-    livePrice: Double? = null   // today's live rate override for the header
+    livePrice: Double? = null,   // today's live rate override for the header
+    isConvertedAtTodayRate: Boolean = false,
+    selectedRange: String = "7D"
 ) {
-    val strings = com.goldsilver.livecalc.util.LocalAppStrings.current
+    val strings = LocalAppStrings.current
 
     if (points.isEmpty()) {
         Box(
             modifier = modifier.background(DarkSurface, RoundedCornerShape(12.dp)),
             contentAlignment = Alignment.Center
         ) {
-            Text(strings.noHistoricalData, color = TextSecondary)
+            Text(strings.noHistoricalData, color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
         }
         return
     }
@@ -65,11 +65,11 @@ fun HistoryLineChart(
 
     // Animation progress
     val animationProgress = remember { Animatable(0f) }
-    LaunchedEffect(points) {
+    LaunchedEffect(points, selectedRange) {
         animationProgress.snapTo(0f)
         animationProgress.animateTo(
             targetValue = 1f,
-            animationSpec = tween(durationMillis = 800)
+            animationSpec = tween(durationMillis = 650)
         )
     }
 
@@ -83,63 +83,68 @@ fun HistoryLineChart(
             .background(DarkSurface, RoundedCornerShape(12.dp))
             .padding(16.dp)
     ) {
-        // High/Low/Current header indicator
+        // High/Low/Current header indicator formatted via PriceConverter
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.Bottom
         ) {
             Column(horizontalAlignment = Alignment.Start) {
-                Text("LOW", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+                Text(strings.low.uppercase(Locale.US), style = MaterialTheme.typography.labelSmall, color = TextMuted)
                 Text(
-                    text = com.goldsilver.livecalc.util.CurrencyFormatter.formatAmount(minPrice, currency),
-                    fontSize = 14.sp,
+                    text = PriceConverter.format(minPrice, currency, perGram = true),
+                    style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = AccentRed
                 )
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("CURRENT RATE", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+                Text(strings.currentRate.uppercase(Locale.US), style = MaterialTheme.typography.labelSmall, color = TextMuted)
                 Text(
-                    text = com.goldsilver.livecalc.util.CurrencyFormatter.formatCurrency(displayPrice, currency),
-                    fontSize = 18.sp,
+                    text = PriceConverter.format(displayPrice, currency, perGram = true),
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.ExtraBold,
                     color = lineColor
                 )
             }
             Column(horizontalAlignment = Alignment.End) {
-                Text("HIGH", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+                Text(strings.high.uppercase(Locale.US), style = MaterialTheme.typography.labelSmall, color = TextMuted)
                 Text(
-                    text = com.goldsilver.livecalc.util.CurrencyFormatter.formatAmount(maxPrice, currency),
-                    fontSize = 14.sp,
+                    text = PriceConverter.format(maxPrice, currency, perGram = true),
+                    style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = AccentGreen
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(14.dp))
 
-        var selectedIndex by remember(points) { mutableStateOf<Int?>(null) }
+        var selectedIndex by remember(points, selectedRange) { mutableStateOf<Int?>(null) }
 
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .pointerInput(points) {
+                .pointerInput(points, selectedRange) {
                     awaitPointerEventScope {
                         while (true) {
                             val event = awaitPointerEvent()
-                            if (event.changes.any { it.pressed }) {
-                                val position = event.changes.first().position
+                            val change = event.changes.firstOrNull() ?: continue
+                            if (change.pressed) {
+                                val position = change.position
                                 val width = size.width
                                 val numPoints = points.size
-                                if (numPoints > 1) {
-                                    val spacing = width / (numPoints - 1)
+                                if (numPoints > 1 && width > 0f) {
+                                    // Reserve margin for Y-axis amount labels (approx 60dp)
+                                    val approxYMargin = 60.dp.toPx()
+                                    val usableChartWidth = (width - approxYMargin).coerceAtLeast(40f)
+                                    val spacing = usableChartWidth / (numPoints - 1)
                                     selectedIndex = (position.x / spacing).roundToInt().coerceIn(0, numPoints - 1)
                                 } else if (numPoints == 1) {
                                     selectedIndex = 0
                                 }
+                                change.consume()
                             }
                         }
                     }
@@ -150,26 +155,83 @@ fun HistoryLineChart(
             val numPoints = points.size
 
             val labelHeight = 24.dp.toPx()
-            val chartHeight = height - labelHeight
+            val chartHeight = (height - labelHeight).coerceAtLeast(10f)
 
-            // Draw horizontal grid lines (3 lines)
+            // Dynamic Y-axis amount labels
+            val midPrice = (maxPrice + minPrice) / 2.0
+            val yAxisStyle = TextStyle(color = TextMuted, fontSize = 9.sp, fontWeight = FontWeight.Medium)
+
+            val maxTextResult = textMeasurer.measure(
+                text = AnnotatedString(PriceConverter.formatAmount(maxPrice, currency)),
+                style = yAxisStyle
+            )
+            val midTextResult = textMeasurer.measure(
+                text = AnnotatedString(PriceConverter.formatAmount(midPrice, currency)),
+                style = yAxisStyle
+            )
+            val minTextResult = textMeasurer.measure(
+                text = AnnotatedString(PriceConverter.formatAmount(minPrice, currency)),
+                style = yAxisStyle
+            )
+
+            val maxLabelWidth = maxOf(maxTextResult.size.width, midTextResult.size.width, minTextResult.size.width)
+            val yAxisWidth = (maxLabelWidth + 12.dp.toPx()).coerceAtLeast(48.dp.toPx())
+            val chartWidth = (width - yAxisWidth).coerceAtLeast(50f)
+
+            // Draw 3 horizontal gridlines with amount labels in selected currency
             val gridColor = if (isSystemDarkThemeGlobal) Color(0xFF2C2C2C) else Color(0xFFE5E5EA)
-            val gridStroke = Stroke(width = 1f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f))
-            for (i in 0..2) {
-                val yGrid = chartHeight * i / 2f
-                drawLine(
-                    color = gridColor,
-                    start = Offset(0f, yGrid),
-                    end = Offset(width, yGrid),
-                    strokeWidth = 1f,
-                    pathEffect = gridStroke.pathEffect
-                )
-            }
+            val gridStroke = Stroke(width = 1f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f), 0f))
+
+            val yGridMax = if (graphMax > graphMin) {
+                (chartHeight - ((maxPrice - graphMin) / (graphMax - graphMin) * chartHeight)).toFloat()
+            } else 0f
+            val yGridMin = if (graphMax > graphMin) {
+                (chartHeight - ((minPrice - graphMin) / (graphMax - graphMin) * chartHeight)).toFloat()
+            } else chartHeight
+            val yGridMid = (yGridMax + yGridMin) / 2f
+
+            // Gridline 1: Max
+            drawLine(
+                color = gridColor,
+                start = Offset(0f, yGridMax),
+                end = Offset(chartWidth, yGridMax),
+                strokeWidth = 1f,
+                pathEffect = gridStroke.pathEffect
+            )
+            drawText(
+                textLayoutResult = maxTextResult,
+                topLeft = Offset(chartWidth + 6.dp.toPx(), (yGridMax - maxTextResult.size.height / 2f).coerceIn(0f, chartHeight - maxTextResult.size.height))
+            )
+
+            // Gridline 2: Mid
+            drawLine(
+                color = gridColor,
+                start = Offset(0f, yGridMid),
+                end = Offset(chartWidth, yGridMid),
+                strokeWidth = 1f,
+                pathEffect = gridStroke.pathEffect
+            )
+            drawText(
+                textLayoutResult = midTextResult,
+                topLeft = Offset(chartWidth + 6.dp.toPx(), (yGridMid - midTextResult.size.height / 2f).coerceIn(0f, chartHeight - midTextResult.size.height))
+            )
+
+            // Gridline 3: Min
+            drawLine(
+                color = gridColor,
+                start = Offset(0f, yGridMin),
+                end = Offset(chartWidth, yGridMin),
+                strokeWidth = 1f,
+                pathEffect = gridStroke.pathEffect
+            )
+            drawText(
+                textLayoutResult = minTextResult,
+                topLeft = Offset(chartWidth + 6.dp.toPx(), (yGridMin - minTextResult.size.height / 2f).coerceIn(0f, chartHeight - minTextResult.size.height))
+            )
 
             if (numPoints == 1) {
-                // Single point rendering
                 val point = points.first()
-                val centerX = width / 2f
+                val centerX = chartWidth / 2f
                 val centerY = chartHeight / 2f
 
                 drawCircle(
@@ -198,7 +260,7 @@ fun HistoryLineChart(
 
             // Map points to screen coordinates
             val screenPoints = points.mapIndexed { index, pair ->
-                val x = index * (width / (numPoints - 1))
+                val x = index * (chartWidth / (numPoints - 1))
                 val rawY = if (graphMax > graphMin) {
                     (chartHeight - ((pair.second - graphMin) / (graphMax - graphMin) * chartHeight)).toFloat()
                 } else {
@@ -226,7 +288,7 @@ fun HistoryLineChart(
                 path = fillPath,
                 brush = Brush.verticalGradient(
                     colors = listOf(
-                        gradientColor.copy(alpha = 0.3f),
+                        gradientColor.copy(alpha = 0.28f),
                         Color.Transparent
                     ),
                     startY = 0f,
@@ -248,38 +310,34 @@ fun HistoryLineChart(
             drawPath(
                 path = linePath,
                 color = lineColor,
-                style = Stroke(width = 6f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                style = Stroke(width = 5.5f, cap = StrokeCap.Round, join = StrokeJoin.Round)
             )
 
-            // Draw date labels on X axis
+            // Draw date labels on X-axis: all 7 for 7D, at least 4 evenly spaced for 30D and 1Y
             val dateFormat = SimpleDateFormat("dd MMM", Locale.getDefault())
-            val numLabels = when {
-                numPoints <= 7 -> minOf(numPoints, 3)
-                numPoints <= 30 -> 4
-                else -> 5
-            }
-            val labelIndices = if (numPoints >= 2) {
-                (0 until numLabels).map { i ->
-                    (i * (numPoints - 1) / (numLabels - 1))
-                }.distinct()
+            val labelIndices = if (numPoints <= 7) {
+                // All points for 7D
+                points.indices.toList()
             } else {
-                listOf(0)
+                // At least 4 evenly spaced
+                val count = 4
+                (0 until count).map { i -> (i * (numPoints - 1) / (count - 1)) }.distinct()
             }
 
             labelIndices.forEach { index ->
                 if (index in 0 until numPoints) {
-                    val x = index * (width / (numPoints - 1))
+                    val x = index * (chartWidth / (numPoints - 1))
                     val dateText = dateFormat.format(Date(points[index].first))
                     val dateTextLayoutResult = textMeasurer.measure(
                         text = AnnotatedString(dateText),
                         style = TextStyle(
                             color = TextMuted,
-                            fontSize = 10.sp,
+                            fontSize = if (numPoints <= 7) 9.sp else 10.sp,
                             fontWeight = FontWeight.Medium
                         )
                     )
-                    val labelWidth = dateTextLayoutResult.size.width
-                    val labelX = (x - labelWidth / 2f).coerceIn(0f, width - labelWidth)
+                    val labelW = dateTextLayoutResult.size.width
+                    val labelX = (x - labelW / 2f).coerceIn(0f, chartWidth - labelW)
                     val labelY = chartHeight + (labelHeight - dateTextLayoutResult.size.height) / 2f
                     drawText(
                         textLayoutResult = dateTextLayoutResult,
@@ -288,91 +346,118 @@ fun HistoryLineChart(
                 }
             }
 
-            // Highlight High & Low points
+            // Highlight High & Low points with offset capsule badges so they never overlap the line
             if (animationProgress.value == 1f && maxIndex != minIndex) {
-                // High Point Dot
+                // High Point
                 val highOffset = screenPoints[maxIndex]
-                drawCircle(
-                    color = AccentGreen,
-                    radius = 10f,
-                    center = highOffset
-                )
-                drawCircle(
-                    color = TextPrimary,
-                    radius = 5f,
-                    center = highOffset
-                )
+                drawCircle(color = AccentGreen, radius = 9f, center = highOffset)
+                drawCircle(color = TextPrimary, radius = 4.5f, center = highOffset)
 
-                // High Point Label
                 val highText = strings.high
                 val highTextResult = textMeasurer.measure(
                     text = AnnotatedString(highText),
                     style = TextStyle(color = AccentGreen, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                 )
+                val padH = 6.dp.toPx()
+                val padV = 2.dp.toPx()
+                val highBadgeW = highTextResult.size.width + padH * 2f
+                val highBadgeH = highTextResult.size.height + padV * 2f
+                val highBadgeX = (highOffset.x - highBadgeW / 2f).coerceIn(0f, chartWidth - highBadgeW)
+                val highBadgeY = (highOffset.y - highBadgeH - 8.dp.toPx()).let {
+                    if (it < 0f) highOffset.y + 10.dp.toPx() else it
+                }
+
+                drawRoundRect(
+                    color = DarkSurface,
+                    topLeft = Offset(highBadgeX, highBadgeY),
+                    size = Size(highBadgeW, highBadgeH),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx(), 4.dp.toPx())
+                )
+                drawRoundRect(
+                    color = AccentGreen,
+                    topLeft = Offset(highBadgeX, highBadgeY),
+                    size = Size(highBadgeW, highBadgeH),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx(), 4.dp.toPx()),
+                    style = Stroke(width = 1f)
+                )
                 drawText(
                     textLayoutResult = highTextResult,
-                    topLeft = Offset(
-                        x = (highOffset.x - highTextResult.size.width / 2f).coerceIn(0f, width - highTextResult.size.width),
-                        y = (highOffset.y - 40f).coerceIn(0f, chartHeight)
-                    )
+                    topLeft = Offset(highBadgeX + padH, highBadgeY + padV)
                 )
 
-                // Low Point Dot
+                // Low Point
                 val lowOffset = screenPoints[minIndex]
-                drawCircle(
-                    color = AccentRed,
-                    radius = 10f,
-                    center = lowOffset
-                )
-                drawCircle(
-                    color = TextPrimary,
-                    radius = 5f,
-                    center = lowOffset
-                )
+                drawCircle(color = AccentRed, radius = 9f, center = lowOffset)
+                drawCircle(color = TextPrimary, radius = 4.5f, center = lowOffset)
 
-                // Low Point Label
                 val lowText = strings.low
                 val lowTextResult = textMeasurer.measure(
                     text = AnnotatedString(lowText),
                     style = TextStyle(color = AccentRed, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                 )
+                val lowBadgeW = lowTextResult.size.width + padH * 2f
+                val lowBadgeH = lowTextResult.size.height + padV * 2f
+                val lowBadgeX = (lowOffset.x - lowBadgeW / 2f).coerceIn(0f, chartWidth - lowBadgeW)
+                val lowBadgeY = (lowOffset.y + 10.dp.toPx()).let {
+                    if (it + lowBadgeH > chartHeight) lowOffset.y - lowBadgeH - 8.dp.toPx() else it
+                }
+
+                drawRoundRect(
+                    color = DarkSurface,
+                    topLeft = Offset(lowBadgeX, lowBadgeY),
+                    size = Size(lowBadgeW, lowBadgeH),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx(), 4.dp.toPx())
+                )
+                drawRoundRect(
+                    color = AccentRed,
+                    topLeft = Offset(lowBadgeX, lowBadgeY),
+                    size = Size(lowBadgeW, lowBadgeH),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx(), 4.dp.toPx()),
+                    style = Stroke(width = 1f)
+                )
                 drawText(
                     textLayoutResult = lowTextResult,
-                    topLeft = Offset(
-                        x = (lowOffset.x - lowTextResult.size.width / 2f).coerceIn(0f, width - lowTextResult.size.width),
-                        y = (lowOffset.y + 12f).coerceIn(0f, chartHeight - lowTextResult.size.height)
-                    )
+                    topLeft = Offset(lowBadgeX + padH, lowBadgeY + padV)
                 )
             }
 
-            // Selection indicator & Enhanced Tooltip
+            // Touch crosshair & Drag-to-scrub tooltip
             selectedIndex?.let { index ->
                 if (index in screenPoints.indices) {
                     val selectedOffset = screenPoints[index]
                     val selectedPoint = points[index]
 
-                    // Vertical guide line
+                    // Vertical crosshair
                     drawLine(
-                        color = TextMuted.copy(alpha = 0.5f),
+                        color = TextMuted.copy(alpha = 0.6f),
                         start = Offset(selectedOffset.x, 0f),
                         end = Offset(selectedOffset.x, chartHeight),
-                        strokeWidth = 2f,
-                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
+                        strokeWidth = 1.5f,
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f), 0f)
                     )
 
-                    // Selection dot
+                    // Horizontal crosshair
+                    drawLine(
+                        color = TextMuted.copy(alpha = 0.35f),
+                        start = Offset(0f, selectedOffset.y),
+                        end = Offset(chartWidth, selectedOffset.y),
+                        strokeWidth = 1.5f,
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f), 0f)
+                    )
+
+                    // Selection intersection dot
                     drawCircle(
                         color = lineColor,
-                        radius = 14f,
+                        radius = 12f,
                         center = selectedOffset
                     )
                     drawCircle(
                         color = DarkBackground,
-                        radius = 7f,
+                        radius = 6f,
                         center = selectedOffset
                     )
 
-                    // Compute difference and percentage vs immediately previous available point
+                    // Difference vs previous day in selected period
                     val prevPoint = if (index > 0) points[index - 1] else null
                     val diff = prevPoint?.let { selectedPoint.second - it.second }
                     val diffPercent = if (prevPoint != null && prevPoint.second > 0) {
@@ -380,8 +465,8 @@ fun HistoryLineChart(
                     } else null
 
                     val tooltipDate = SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(selectedPoint.first))
-                    val tooltipRate = "${com.goldsilver.livecalc.util.CurrencyFormatter.formatCurrency(selectedPoint.second, currency)}${strings.perGram}"
-                    
+                    val tooltipRate = PriceConverter.format(selectedPoint.second, currency, perGram = true)
+
                     val dateResult = textMeasurer.measure(
                         text = AnnotatedString(tooltipDate),
                         style = TextStyle(color = TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Medium)
@@ -394,8 +479,8 @@ fun HistoryLineChart(
                     val changeString: String
                     val changeColor: Color
                     if (diff != null && diffPercent != null) {
-                        val formattedDiff = com.goldsilver.livecalc.util.CurrencyFormatter.formatCurrency(Math.abs(diff), currency)
-                        val formattedPercent = String.format(Locale.US, "%.2f", Math.abs(diffPercent))
+                        val formattedDiff = PriceConverter.formatAmount(kotlin.math.abs(diff), currency)
+                        val formattedPercent = String.format(Locale.US, "%.2f", kotlin.math.abs(diffPercent))
                         if (diff > 0.001) {
                             changeString = "+$formattedDiff (▲ +$formattedPercent%)"
                             changeColor = AccentGreen
@@ -416,31 +501,31 @@ fun HistoryLineChart(
                         style = TextStyle(color = changeColor, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     )
 
-                    val tooltipPadding = 20f
-                    val boxWidth = maxOf(dateResult.size.width, rateResult.size.width, changeResult.size.width) + tooltipPadding * 2
-                    val boxHeight = dateResult.size.height + rateResult.size.height + changeResult.size.height + tooltipPadding * 2
+                    val tooltipPadding = 16f
+                    val boxWidth = maxOf(dateResult.size.width, rateResult.size.width, changeResult.size.width) + tooltipPadding * 2f
+                    val boxHeight = dateResult.size.height + rateResult.size.height + changeResult.size.height + tooltipPadding * 2f
 
-                    // Calculate Box Position (Prevent clipping)
+                    // Calculate Tooltip Position
                     var boxX = selectedOffset.x - boxWidth / 2f
-                    boxX = boxX.coerceIn(0f, width - boxWidth)
-                    
-                    var boxY = selectedOffset.y - boxHeight - 24f
+                    boxX = boxX.coerceIn(0f, chartWidth - boxWidth)
+
+                    var boxY = selectedOffset.y - boxHeight - 20f
                     if (boxY < 0f) {
-                        boxY = selectedOffset.y + 24f // Display below if cuts off at top
+                        boxY = selectedOffset.y + 20f
                     }
 
                     // Draw Tooltip Box
                     drawRoundRect(
                         color = DarkSurface,
                         topLeft = Offset(boxX, boxY),
-                        size = androidx.compose.ui.geometry.Size(boxWidth, boxHeight),
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(12f, 12f)
+                        size = Size(boxWidth, boxHeight),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(10f, 10f)
                     )
                     drawRoundRect(
                         color = lineColor.copy(alpha = 0.5f),
                         topLeft = Offset(boxX, boxY),
-                        size = androidx.compose.ui.geometry.Size(boxWidth, boxHeight),
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(12f, 12f),
+                        size = Size(boxWidth, boxHeight),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(10f, 10f),
                         style = Stroke(width = 1.5f)
                     )
 
@@ -464,6 +549,17 @@ fun HistoryLineChart(
                     )
                 }
             }
+        }
+
+        // Caption "Converted at today's rate" for EUR / AED / GBP
+        if (isConvertedAtTodayRate) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = strings.convertedAtTodayRate,
+                style = MaterialTheme.typography.labelSmall,
+                color = TextMuted,
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            )
         }
     }
 }

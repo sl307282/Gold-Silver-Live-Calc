@@ -34,4 +34,13 @@
     <string name="subtitle_calc_price">Calculate price</string>
     <string name="subtitle_verify_purity">Verify purity</string>
     <string name="subtitle_price_alerts">Price alerts</string>
+
+    <!-- Historical Trends -->
+    <string name="period_change">Period Change</string>
+    <string name="range">Range</string>
+    <string name="daily_rates">Daily Rates</string>
+    <string name="converted_at_today_rate">Converted at today\'s rate</string>
+    <string name="date_header">Date</string>
+    <string name="close_rate_header">Close Rate</string>
+    <string name="change_header">Change</string>
 </resources>

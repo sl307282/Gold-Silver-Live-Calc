@@ -77,6 +77,13 @@ data class AppStrings(
     val premiumFeature: String,
     val unlockTrendsDesc: String,
     val upgradeToPremium: String,
+    val periodChange: String = "Period Change",
+    val range: String = "Range",
+    val dailyRates: String = "Daily Rates",
+    val convertedAtTodayRate: String = "Converted at today's rate",
+    val dateHeader: String = "Date",
+    val closeRateHeader: String = "Close Rate",
+    val changeHeader: String = "Change",
 
     // Calculators (Gold & Silver)
     val goldCalculator: String,

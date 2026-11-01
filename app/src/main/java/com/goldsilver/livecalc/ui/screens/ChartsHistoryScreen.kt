@@ -405,7 +405,7 @@ fun ChartsHistoryScreen(
                             ) {
                                 Text(strings.highestRate, color = TextSecondary, fontSize = 13.sp)
                                 Text(
-                                    text = "${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(maxPrice)} $currency${strings.perGram}",
+                                    text = "${com.goldsilver.livecalc.util.CurrencyFormatter.formatCurrency(maxPrice, currency)}${strings.perGram}",
                                     color = AccentGreen,
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 14.sp
@@ -417,7 +417,7 @@ fun ChartsHistoryScreen(
                             ) {
                                 Text(strings.lowestRate, color = TextSecondary, fontSize = 13.sp)
                                 Text(
-                                    text = "${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(minPrice)} $currency${strings.perGram}",
+                                    text = "${com.goldsilver.livecalc.util.CurrencyFormatter.formatCurrency(minPrice, currency)}${strings.perGram}",
                                     color = AccentRed,
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 14.sp
@@ -429,7 +429,7 @@ fun ChartsHistoryScreen(
                             ) {
                                 Text(strings.averagePrice, color = TextSecondary, fontSize = 13.sp)
                                 Text(
-                                    text = "${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(avgPrice)} $currency${strings.perGram}",
+                                    text = "${com.goldsilver.livecalc.util.CurrencyFormatter.formatCurrency(avgPrice, currency)}${strings.perGram}",
                                     color = TextPrimary,
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 14.sp

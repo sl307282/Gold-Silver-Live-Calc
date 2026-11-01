@@ -117,11 +117,11 @@ fun PriceAlertsScreen(
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text("Current Gold (24K)", color = TextSecondary, fontSize = 12.sp)
-                            Text("${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(currentGoldPrice)} $currency", color = GoldPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            Text(com.goldsilver.livecalc.util.CurrencyFormatter.formatCurrency(currentGoldPrice, currency), color = GoldPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                         }
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text("Current Silver", color = TextSecondary, fontSize = 12.sp)
-                            Text("${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(currentSilverPrice)} $currency", color = SilverPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            Text(com.goldsilver.livecalc.util.CurrencyFormatter.formatCurrency(currentSilverPrice, currency), color = SilverPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                         }
                     }
                 }
@@ -310,7 +310,7 @@ fun PriceAlertsScreen(
                         // Target Price Input
                         OutlinedTextField(
                             value = targetPriceInput,
-                            onValueChange = { targetPriceInput = com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatInput(it) },
+                            onValueChange = { targetPriceInput = com.goldsilver.livecalc.util.CurrencyFormatter.formatInput(it, currency) },
                             label = { Text("Target Price ($currency/Gram)") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             colors = OutlinedTextFieldDefaults.colors(
@@ -327,13 +327,13 @@ fun PriceAlertsScreen(
                         // Save Alert Button
                         Button(
                             onClick = {
-                                val price = com.goldsilver.livecalc.util.IndianCurrencyFormatter.parseAmount(targetPriceInput)
+                                val price = com.goldsilver.livecalc.util.CurrencyFormatter.parseAmount(targetPriceInput)
                                 if (price > 0) {
                                     val selectedMetal = if (isGold) "GOLD" else "SILVER"
                                     val metalLabel = if (isGold) "Gold" else "Silver"
                                     val selectedCondition = if (isAboveCondition) "ABOVE" else "BELOW"
                                     val conditionLabel = if (isAboveCondition) "Goes Above (≥)" else "Goes Below (≤)"
-                                    val formattedPrice = "${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(price)} $currency"
+                                    val formattedPrice = com.goldsilver.livecalc.util.CurrencyFormatter.formatCurrency(price, currency)
 
                                     // Check if duplicate alert exists for same metal, target price, and condition
                                     val isDuplicate = activeAlerts.any { alert ->
@@ -547,7 +547,7 @@ fun AlertItem(
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "$metalName $conditionSymbol ${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(alert.targetPrice)} $currency",
+                        text = "$metalName $conditionSymbol ${com.goldsilver.livecalc.util.CurrencyFormatter.formatCurrency(alert.targetPrice, currency)}",
                         color = TextPrimary,
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp

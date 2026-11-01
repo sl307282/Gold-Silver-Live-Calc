@@ -80,25 +80,19 @@ fun GoldCalculatorScreen(
     val rate18k = latestRate?.goldPrice18k ?: (rate24k * 0.75)
     val rate14k = latestRate?.goldPrice14k ?: (rate24k * 0.5833)
 
-    val currencySymbol = when (currency) {
-        "INR" -> "₹"
-        "USD" -> "$"
-        "EUR" -> "€"
-        "GBP" -> "£"
-        else -> currency
-    }
+    val currencySymbol = com.goldsilver.livecalc.util.CurrencyFormatter.getCurrencySymbol(currency).trim()
 
     val currentRatePerGram = when (selectedPurity) {
         "24K" -> rate24k; "22K" -> rate22k; "18K" -> rate18k; "14K" -> rate14k; else -> rate24k
     }
 
-    LaunchedEffect(selectedPurity, latestRate) {
+    LaunchedEffect(selectedPurity, latestRate, currency) {
         if (!isEditingRate) {
-            customRateInput = com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(currentRatePerGram)
+            customRateInput = com.goldsilver.livecalc.util.CurrencyFormatter.formatAmount(currentRatePerGram, currency)
         }
     }
 
-    val finalRatePerGram = com.goldsilver.livecalc.util.IndianCurrencyFormatter.parseAmount(customRateInput).let {
+    val finalRatePerGram = com.goldsilver.livecalc.util.CurrencyFormatter.parseAmount(customRateInput).let {
         if (it <= 0.0) currentRatePerGram else it
     }
 
@@ -115,7 +109,7 @@ fun GoldCalculatorScreen(
     ) {
         if (hasCalculated) {
             val weight = weightInput.toDoubleOrNull() ?: 0.0
-            val makingCharge = com.goldsilver.livecalc.util.IndianCurrencyFormatter.parseAmount(makingChargeInput)
+            val makingCharge = com.goldsilver.livecalc.util.CurrencyFormatter.parseAmount(makingChargeInput)
             val gstPercent = gstInput.toDoubleOrNull() ?: 0.0
             val unitMultiplier = when (selectedUnit) {
                 "Kilogram" -> 1000.0; "Tola" -> 11.6638; "Ounce" -> 31.1035; "Milligram" -> 0.001; else -> 1.0
@@ -235,13 +229,14 @@ fun GoldCalculatorScreen(
                                             selectedPurity = purity
                                             isEditingRate = false
                                             focusManager.clearFocus()
-                                            customRateInput = com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(
+                                            customRateInput = com.goldsilver.livecalc.util.CurrencyFormatter.formatAmount(
                                                 when (purity) {
                                                     "24K" -> rate24k
                                                     "22K" -> rate22k
                                                     "18K" -> rate18k
                                                     else -> rate14k
-                                                }
+                                                },
+                                                currency
                                             )
                                         },
                                     contentAlignment = Alignment.Center
@@ -273,7 +268,7 @@ fun GoldCalculatorScreen(
                     ) {
                         OutlinedTextField(
                             value = customRateInput,
-                            onValueChange = { customRateInput = com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatInput(it) },
+                            onValueChange = { customRateInput = com.goldsilver.livecalc.util.CurrencyFormatter.formatInput(it, currency) },
                             label = { Text("Rate ($currency/Gram)") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             colors = OutlinedTextFieldDefaults.colors(
@@ -296,8 +291,8 @@ fun GoldCalculatorScreen(
                         )
                             IconButton(onClick = {
                                 isEditingRate = false; focusManager.clearFocus()
-                                if (com.goldsilver.livecalc.util.IndianCurrencyFormatter.parseAmount(customRateInput) <= 0.0)
-                                    customRateInput = com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(currentRatePerGram)
+                                if (com.goldsilver.livecalc.util.CurrencyFormatter.parseAmount(customRateInput) <= 0.0)
+                                    customRateInput = com.goldsilver.livecalc.util.CurrencyFormatter.formatAmount(currentRatePerGram, currency)
                             }) {
                                 Icon(Icons.Default.Check, contentDescription = "Confirm", tint = GoldPrimary)
                             }
@@ -317,21 +312,22 @@ fun GoldCalculatorScreen(
                                             .clip(CircleShape)
                                             .background(Color(0xFF4CAF50))
                                     )
-                                    val isCustom = customRateInput.toDoubleOrNull() != null &&
-                                            Math.abs((customRateInput.toDoubleOrNull() ?: 0.0) - currentRatePerGram) > 0.01
+                                    val isCustom = com.goldsilver.livecalc.util.CurrencyFormatter.parseAmount(customRateInput).let {
+                                        Math.abs(it - currentRatePerGram) > 0.01
+                                    }
                                     Text(
                                         text = if (isCustom) "Custom Rate ($selectedPurity)" else "Live Rate ($selectedPurity)",
                                         color = TextSecondary, fontSize = 12.sp
                                     )
                                 }
-                                if ((customRateInput.toDoubleOrNull() ?: 0.0).let { Math.abs(it - currentRatePerGram) > 0.01 }) {
+                                if (com.goldsilver.livecalc.util.CurrencyFormatter.parseAmount(customRateInput).let { Math.abs(it - currentRatePerGram) > 0.01 }) {
                                     Text(
                                         text = "Reset to Live",
                                         color = GoldPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold,
                                         modifier = Modifier
                                             .clickable {
                                                 isEditingRate = false; focusManager.clearFocus()
-                                                customRateInput = String.format(java.util.Locale.US, "%.2f", currentRatePerGram)
+                                                customRateInput = com.goldsilver.livecalc.util.CurrencyFormatter.formatAmount(currentRatePerGram, currency)
                                             }
                                             .padding(top = 2.dp)
                                      )
@@ -343,7 +339,7 @@ fun GoldCalculatorScreen(
                                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
                                     Text(
-                                        text = formatIndianStyle(finalRatePerGram),
+                                        text = com.goldsilver.livecalc.util.CurrencyFormatter.formatAmount(finalRatePerGram, currency),
                                         color = GoldPrimary, fontWeight = FontWeight.Bold, fontSize = 26.sp
                                     )
                                     Text(
@@ -436,7 +432,7 @@ fun GoldCalculatorScreen(
                                         val num = newValue.toDoubleOrNull()
                                         if (newValue.isEmpty() || (num != null && num <= 100.0)) makingChargeInput = newValue
                                     } else {
-                                        makingChargeInput = com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatInput(newValue)
+                                        makingChargeInput = com.goldsilver.livecalc.util.CurrencyFormatter.formatInput(newValue, currency)
                                     }
                                 }
                             },
@@ -540,9 +536,9 @@ fun GoldCalculatorScreen(
                         Text(strings.priceBreakdown.uppercase(), color = GoldPrimary, fontWeight = FontWeight.Bold, fontSize = 12.sp, letterSpacing = 1.sp)
                         HorizontalDivider(color = GoldPrimary.copy(alpha = 0.15f))
 
-                        BreakdownRow(icon = "🪙", label = strings.baseMetalPrice, value = "${formatIndianStyle(calculatedValues.baseGoldValue)} $currency")
-                        BreakdownRow(icon = "🛠", label = strings.totalMakingCharges, value = "${formatIndianStyle(calculatedValues.makingCharges)} $currency")
-                        BreakdownRow(icon = "🧾", label = strings.gstAmount, value = "${formatIndianStyle(calculatedValues.gstAmount)} $currency")
+                        BreakdownRow(icon = "🪙", label = strings.baseMetalPrice, value = com.goldsilver.livecalc.util.CurrencyFormatter.formatCurrency(calculatedValues.baseGoldValue, currency))
+                        BreakdownRow(icon = "🛠", label = strings.totalMakingCharges, value = com.goldsilver.livecalc.util.CurrencyFormatter.formatCurrency(calculatedValues.makingCharges, currency))
+                        BreakdownRow(icon = "🧾", label = strings.gstAmount, value = com.goldsilver.livecalc.util.CurrencyFormatter.formatCurrency(calculatedValues.gstAmount, currency))
                     }
                 }
 
@@ -608,7 +604,7 @@ fun GoldCalculatorScreen(
                                 }
 
                                 Text(
-                                    text = "${formatIndianStyle(calculatedValues.finalTotal)} $currency",
+                                    text = com.goldsilver.livecalc.util.CurrencyFormatter.formatCurrency(calculatedValues.finalTotal, currency),
                                     color = Color(0xFF1E1A11),
                                     fontWeight = FontWeight.ExtraBold,
                                     fontSize = 32.sp,
@@ -632,7 +628,7 @@ fun GoldCalculatorScreen(
                     onClick = {
                         weightInput = ""; makingChargeInput = ""; gstInput = "3"
                         selectedPurity = "24K"; isPercentageCharge = true; hasCalculated = false
-                        customRateInput = com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(rate24k)
+                        customRateInput = com.goldsilver.livecalc.util.CurrencyFormatter.formatAmount(rate24k, currency)
                         focusManager.clearFocus()
                         coroutineScope.launch {
                             scrollState.animateScrollTo(0)
@@ -677,8 +673,8 @@ private fun BreakdownRow(icon: String, label: String, value: String) {
     }
 }
 
-private fun formatIndianStyle(value: Double): String {
-    return com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(value)
+private fun formatCurrencyStyle(value: Double, currency: String): String {
+    return com.goldsilver.livecalc.util.CurrencyFormatter.formatAmount(value, currency)
 }
 
 data class CalculatedBreakdown(

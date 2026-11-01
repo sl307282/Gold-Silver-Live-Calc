@@ -33,9 +33,40 @@ class MetalRepository(
 
     fun getLatestRateForCurrencyFlow(currency: String): Flow<RateEntity?> = rateDao.getLatestRateForCurrencyFlow(currency)
 
+    fun getLatestRateForCurrencyWithFallbackFlow(targetCurrency: String): Flow<RateEntity?> {
+        return kotlinx.coroutines.flow.combine(
+            rateDao.getLatestRateForCurrencyFlow(targetCurrency),
+            rateDao.getLatestRateFlow()
+        ) { targetRate, anyRate ->
+            if (targetRate != null && targetRate.currency.equals(targetCurrency, ignoreCase = true)) {
+                com.goldsilver.livecalc.util.CurrencyConverter.registerRate(targetRate)
+                targetRate
+            } else if (anyRate != null) {
+                com.goldsilver.livecalc.util.CurrencyConverter.convertRateEntity(anyRate, targetCurrency)
+            } else {
+                com.goldsilver.livecalc.util.CurrencyConverter.getDefaultRateEntity(targetCurrency)
+            }
+        }
+    }
+
     fun getHistoricalRatesFlow(): Flow<List<RateEntity>> = rateDao.getHistoricalRatesFlow()
 
     fun getHistoricalRatesForCurrencyFlow(currency: String): Flow<List<RateEntity>> = rateDao.getHistoricalRatesForCurrencyFlow(currency)
+
+    fun getHistoricalRatesForCurrencyWithFallbackFlow(targetCurrency: String): Flow<List<RateEntity>> {
+        return kotlinx.coroutines.flow.combine(
+            rateDao.getHistoricalRatesForCurrencyFlow(targetCurrency),
+            rateDao.getHistoricalRatesFlow()
+        ) { targetHistory, anyHistory ->
+            if (targetHistory.isNotEmpty()) {
+                targetHistory
+            } else if (anyHistory.isNotEmpty()) {
+                anyHistory.map { com.goldsilver.livecalc.util.CurrencyConverter.convertRateEntity(it, targetCurrency) }
+            } else {
+                emptyList()
+            }
+        }
+    }
 
     suspend fun getLatestRate(): RateEntity? = rateDao.getLatestRate()
 
@@ -85,10 +116,17 @@ class MetalRepository(
         val activeAlerts = alertDao.getActiveAlerts()
         val sharedPrefs = context.getSharedPreferences("gold_silver_prefs", Context.MODE_PRIVATE)
         val isNotificationsEnabled = sharedPrefs.getBoolean("notifications_enabled", true)
+        val currentAppCurrency = sharedPrefs.getString("currency", "INR") ?: "INR"
         val notificationHelper = com.goldsilver.livecalc.background.NotificationHelper(context)
 
+        val rateInCurrentCurrency = if (rate.currency.equals(currentAppCurrency, ignoreCase = true)) {
+            rate
+        } else {
+            com.goldsilver.livecalc.util.CurrencyConverter.convertRateEntity(rate, currentAppCurrency)
+        }
+
         for (alert in activeAlerts) {
-            val currentPrice = if (alert.metal == "GOLD") rate.goldPrice24k else rate.silverPrice
+            val currentPrice = if (alert.metal == "GOLD") rateInCurrentCurrency.goldPrice24k else rateInCurrentCurrency.silverPrice
             val metalName = if (alert.metal == "GOLD") "Gold (24K)" else "Silver"
             
             var isConditionMet = false
@@ -112,9 +150,8 @@ class MetalRepository(
                 if (!isAlreadyTriggeredToday) {
                     // Trigger notification if enabled
                     if (isNotificationsEnabled) {
-                        val symbol = getCurrencySymbol(rate.currency)
-                        val formattedPrice = "$symbol${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(currentPrice)}"
-                        val formattedTarget = "$symbol${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(alert.targetPrice)}"
+                        val formattedPrice = com.goldsilver.livecalc.util.CurrencyFormatter.formatCurrency(currentPrice, currentAppCurrency)
+                        val formattedTarget = com.goldsilver.livecalc.util.CurrencyFormatter.formatCurrency(alert.targetPrice, currentAppCurrency)
                         val title = if (alert.metal == "GOLD") "🔔 Gold Price Alert" else "🔔 Silver Price Alert"
                         val message = if (alert.condition == "ABOVE") {
                             "$metalName has reached $formattedPrice/g, crossing your target of $formattedTarget/g."
@@ -325,99 +362,121 @@ class MetalRepository(
             apiError.value = null
 
             val dbUrl = firebaseDatabaseUrl.trim()
+            val targetCurrency = currency.trim().uppercase(java.util.Locale.US)
+
             if (dbUrl.isBlank()) {
-                val latestCachedRate = rateDao.getLatestRate()
+                val latestCachedRate = rateDao.getRatesByCurrency(targetCurrency).firstOrNull() ?: rateDao.getLatestRate()
                 return@withContext if (latestCachedRate != null) {
-                    Result.success(latestCachedRate)
+                    val converted = com.goldsilver.livecalc.util.CurrencyConverter.convertRateEntity(latestCachedRate, targetCurrency)
+                    Result.success(converted)
                 } else {
-                    Result.failure(Exception("Firebase Database URL is not configured."))
+                    Result.success(com.goldsilver.livecalc.util.CurrencyConverter.getDefaultRateEntity(targetCurrency))
                 }
             }
 
             val isFirestore = !dbUrl.startsWith("http://") && !dbUrl.startsWith("https://")
+            var targetRateEntity: RateEntity? = null
 
-            // 1. Fetch Latest Snapshot
-            val fetchUrl = if (!isFirestore) {
+            if (!isFirestore) {
                 val normalizedUrl = if (dbUrl.endsWith("/")) dbUrl else "$dbUrl/"
-                "${normalizedUrl}rates/$currency.json"
-            } else {
-                "https://firestore.googleapis.com/v1/projects/$dbUrl/databases/(default)/documents/rates/$currency"
-            }
 
-            val request = okhttp3.Request.Builder()
-                .url(fetchUrl)
-                .build()
+                // 1. Fetch entire rates payload if available to populate all currencies in Room
+                val allRatesUrl = "${normalizedUrl}rates.json"
+                val allReq = okhttp3.Request.Builder().url(allRatesUrl).build()
+                try {
+                    okHttpClient.newCall(allReq).execute().use { response ->
+                        if (response.isSuccessful) {
+                            val body = response.body?.string()
+                            if (!body.isNullOrBlank() && body != "null") {
+                                val rootObj = JSONObject(body)
+                                val currencies = listOf("INR", "USD", "EUR", "AED", "GBP")
+                                for (c in currencies) {
+                                    val currObj = rootObj.optJSONObject(c)
+                                    if (currObj != null) {
+                                        try {
+                                            val rate = json.decodeFromString<RateEntity>(currObj.toString()).copy(id = 0, currency = c)
+                                            com.goldsilver.livecalc.util.CurrencyConverter.registerRate(rate)
+                                            saveOrUpdateTodayRate(rate)
+                                            if (c.equals(targetCurrency, ignoreCase = true)) {
+                                                targetRateEntity = rate
+                                            }
+                                        } catch (ignored: Exception) {}
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch (ignored: Exception) {}
 
-            val parsedRate: RateEntity = okHttpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    throw java.io.IOException("Firebase response error: ${response.code} ${response.message}")
+                // 2. If targetRateEntity was not retrieved from rates.json, fetch specifically for targetCurrency
+                if (targetRateEntity == null) {
+                    val singleUrl = "${normalizedUrl}rates/$targetCurrency.json"
+                    val singleReq = okhttp3.Request.Builder().url(singleUrl).build()
+                    try {
+                        okHttpClient.newCall(singleReq).execute().use { response ->
+                            if (response.isSuccessful) {
+                                val body = response.body?.string()
+                                if (!body.isNullOrBlank() && body != "null") {
+                                    val rate = json.decodeFromString<RateEntity>(body).copy(id = 0, currency = targetCurrency)
+                                    com.goldsilver.livecalc.util.CurrencyConverter.registerRate(rate)
+                                    saveOrUpdateTodayRate(rate)
+                                    targetRateEntity = rate
+                                }
+                            }
+                        }
+                    } catch (ignored: Exception) {}
                 }
-                val responseBody = response.body?.string()
-                if (responseBody.isNullOrBlank() || responseBody == "null") {
-                    throw java.io.IOException("No data found at path for $currency")
-                }
 
-                // Dual-compatibility parser: Firestore format contains "fields" key
-                if (responseBody.contains("\"fields\"")) {
-                    parseFirestoreJson(responseBody, currency)
-                } else {
-                    json.decodeFromString<RateEntity>(responseBody)
-                }
-            }
-
-            // 2. Fetch history if present in Firebase Realtime DB to populate historical records
-            try {
-                if (!isFirestore) {
-                    val normalizedUrl = if (dbUrl.endsWith("/")) dbUrl else "$dbUrl/"
-                    val historyUrl = "${normalizedUrl}history/$currency.json"
+                // 3. Fetch history for target currency if present in Firebase Realtime DB
+                try {
+                    val historyUrl = "${normalizedUrl}history/$targetCurrency.json"
                     val historyReq = okhttp3.Request.Builder().url(historyUrl).build()
                     okHttpClient.newCall(historyReq).execute().use { histResp ->
                         if (histResp.isSuccessful) {
                             val histBody = histResp.body?.string()
                             if (!histBody.isNullOrBlank() && histBody != "null") {
-                                syncHistoryJsonToRoom(histBody, currency)
+                                syncHistoryJsonToRoom(histBody, targetCurrency)
                             }
                         }
                     }
+                } catch (e: Exception) {
+                    e.printStackTrace()
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-
-            // Sync USD snapshot rates for Market Snapshot if not current currency
-            if (!currency.equals("USD", ignoreCase = true) && !isFirestore && dbUrl.isNotBlank()) {
-                try {
-                    val normalizedUrl = if (dbUrl.endsWith("/")) dbUrl else "$dbUrl/"
-                    val usdFetchUrl = "${normalizedUrl}rates/USD.json"
-                    val usdReq = okhttp3.Request.Builder().url(usdFetchUrl).build()
-                    okHttpClient.newCall(usdReq).execute().use { usdResp ->
-                        if (usdResp.isSuccessful) {
-                            val usdBody = usdResp.body?.string()
-                            if (!usdBody.isNullOrBlank() && usdBody != "null") {
-                                val usdParsed = json.decodeFromString<RateEntity>(usdBody).copy(id = 0)
-                                saveOrUpdateTodayRate(usdParsed)
-                            }
-                        }
+            } else {
+                // Firestore fetch
+                val firestoreUrl = "https://firestore.googleapis.com/v1/projects/$dbUrl/databases/(default)/documents/rates/$targetCurrency"
+                val request = okhttp3.Request.Builder().url(firestoreUrl).build()
+                okHttpClient.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        throw java.io.IOException("Firebase response error: ${response.code} ${response.message}")
                     }
-                } catch (ignored: Exception) {}
+                    val body = response.body?.string()
+                    if (body.isNullOrBlank() || body == "null") {
+                        throw java.io.IOException("No data found for $targetCurrency")
+                    }
+                    val rate = parseFirestoreJson(body, targetCurrency).copy(id = 0)
+                    com.goldsilver.livecalc.util.CurrencyConverter.registerRate(rate)
+                    saveOrUpdateTodayRate(rate)
+                    targetRateEntity = rate
+                }
             }
 
-            // Save or update today's record
-            val rateToSave = parsedRate.copy(id = 0)
-            saveOrUpdateTodayRate(rateToSave)
-            checkAndTriggerAlerts(rateToSave)
+            val finalRate = targetRateEntity
+                ?: rateDao.getRatesByCurrency(targetCurrency).firstOrNull()
+                ?: rateDao.getLatestRate()?.let { com.goldsilver.livecalc.util.CurrencyConverter.convertRateEntity(it, targetCurrency) }
+                ?: com.goldsilver.livecalc.util.CurrencyConverter.getDefaultRateEntity(targetCurrency)
 
-            Result.success(rateToSave)
+            checkAndTriggerAlerts(finalRate)
+            Result.success(finalRate)
         } catch (e: Exception) {
             e.printStackTrace()
             val errorMsg = e.localizedMessage ?: e.toString()
             apiError.value = errorMsg
-            val latestCachedRate = rateDao.getLatestRate()
-            if (latestCachedRate != null) {
-                Result.success(latestCachedRate)
-            } else {
-                Result.failure(e)
-            }
+            val targetCurrency = currency.trim().uppercase(java.util.Locale.US)
+            val fallback = rateDao.getRatesByCurrency(targetCurrency).firstOrNull()
+                ?: rateDao.getLatestRate()?.let { com.goldsilver.livecalc.util.CurrencyConverter.convertRateEntity(it, targetCurrency) }
+                ?: com.goldsilver.livecalc.util.CurrencyConverter.getDefaultRateEntity(targetCurrency)
+            Result.success(fallback)
         }
     }
 

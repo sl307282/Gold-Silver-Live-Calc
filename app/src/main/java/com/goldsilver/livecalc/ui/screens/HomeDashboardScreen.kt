@@ -31,7 +31,7 @@ import androidx.compose.ui.unit.sp
 import com.goldsilver.livecalc.ui.components.PriceChangeIndicator
 import com.goldsilver.livecalc.ui.theme.*
 import com.goldsilver.livecalc.ui.viewmodel.GoldSilverViewModel
-import com.goldsilver.livecalc.util.IndianCurrencyFormatter
+import com.goldsilver.livecalc.util.CurrencyFormatter
 import com.goldsilver.livecalc.util.LocalAppStrings
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -126,10 +126,11 @@ fun HomeDashboardScreen(
 
                         MetalRateCard(
                             title = "Gold (XAU)",
-                            primaryPrice = "${IndianCurrencyFormatter.formatCurrencyINR(rate.goldPrice24k)} / g",
-                            headlineFigure = "10 g · ${IndianCurrencyFormatter.formatCurrencyINR(rate.goldPrice24k * 10)}",
+                            primaryPrice = "${CurrencyFormatter.formatCurrency(rate.goldPrice24k, currency)} / g",
+                            headlineFigure = "10 g · ${CurrencyFormatter.formatCurrency(rate.goldPrice24k * 10, currency)}",
                             changePercent = goldChange,
                             diffAmount = goldDiffAmount,
+                            currency = currency,
                             isGold = true,
                             purityList = listOf(
                                 "24K (99.9%)" to rate.goldPrice24k,
@@ -171,10 +172,11 @@ fun HomeDashboardScreen(
 
                         MetalRateCard(
                             title = "Silver (XAG)",
-                            primaryPrice = "${IndianCurrencyFormatter.formatCurrencyINR(rate.silverPrice)} / g",
-                            headlineFigure = "1 kg · ${IndianCurrencyFormatter.formatCurrencyINR(rate.silverPrice * 1000)}",
+                            primaryPrice = "${CurrencyFormatter.formatCurrency(rate.silverPrice, currency)} / g",
+                            headlineFigure = "1 kg · ${CurrencyFormatter.formatCurrency(rate.silverPrice * 1000, currency)}",
                             changePercent = silverChange,
                             diffAmount = silverDiffAmount,
+                            currency = currency,
                             isGold = false,
                             purityList = listOf(
                                 "999" to rate.silverPrice,
@@ -314,6 +316,7 @@ fun MetalRateCard(
     headlineFigure: String? = null,
     changePercent: Double?,
     diffAmount: Double?,
+    currency: String = "INR",
     isGold: Boolean,
     purityList: List<Pair<String, Double>>,
     weightList: List<Pair<String, Double>>,
@@ -436,7 +439,7 @@ fun MetalRateCard(
                 val isDown = diffAmount < -0.001
                 val arrow = if (isUp) "▲" else if (isDown) "▼" else "—"
                 val color = if (isUp) Color(0xFF4ADE80) else if (isDown) Color(0xFFFF6B6B) else TextMuted
-                val absDiff = IndianCurrencyFormatter.formatCurrencyINR(Math.abs(diffAmount))
+                val absDiff = CurrencyFormatter.formatCurrency(Math.abs(diffAmount), currency)
                 val pctStr = String.format(Locale.US, "%.2f", Math.abs(changePercent))
 
                 Spacer(modifier = Modifier.height(4.dp))
@@ -465,7 +468,7 @@ fun MetalRateCard(
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 purityList.forEachIndexed { index, (label, value) ->
-                    BreakdownItemRow(label = label, value = value, isFirst = index == 0)
+                    BreakdownItemRow(label = label, value = value, currency = currency, isFirst = index == 0)
                 }
 
                 Spacer(modifier = Modifier.height(10.dp))
@@ -482,7 +485,7 @@ fun MetalRateCard(
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 weightList.forEachIndexed { index, (label, value) ->
-                    BreakdownItemRow(label = label, value = value, isFirst = index == 0)
+                    BreakdownItemRow(label = label, value = value, currency = currency, isFirst = index == 0)
                 }
             }
 
@@ -519,7 +522,7 @@ fun MetalRateCard(
 }
 
 @Composable
-private fun BreakdownItemRow(label: String, value: Double, isFirst: Boolean) {
+private fun BreakdownItemRow(label: String, value: Double, currency: String, isFirst: Boolean) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -534,7 +537,7 @@ private fun BreakdownItemRow(label: String, value: Double, isFirst: Boolean) {
             fontWeight = if (isFirst) FontWeight.SemiBold else FontWeight.Normal
         )
         Text(
-            text = IndianCurrencyFormatter.formatCurrencyINR(value),
+            text = CurrencyFormatter.formatCurrency(value, currency),
             color = if (isFirst) TextPrimary else TextPrimary.copy(alpha = 0.7f),
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = if (isFirst) FontWeight.Bold else FontWeight.Medium

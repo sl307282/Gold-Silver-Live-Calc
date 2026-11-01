@@ -75,12 +75,12 @@ class GoldSilverViewModel(application: Application) : AndroidViewModel(applicati
     // Rates Data per selected currency
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val latestRate: StateFlow<RateEntity?> = currency.flatMapLatest { curr ->
-        repository.getLatestRateForCurrencyFlow(curr)
+        repository.getLatestRateForCurrencyWithFallbackFlow(curr)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val historicalRates: StateFlow<List<RateEntity>> = currency.flatMapLatest { curr ->
-        repository.getHistoricalRatesForCurrencyFlow(curr)
+        repository.getHistoricalRatesForCurrencyWithFallbackFlow(curr)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // USD Benchmark Rates for Market Snapshot

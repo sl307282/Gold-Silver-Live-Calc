@@ -92,7 +92,7 @@ fun HistoryLineChart(
             Column(horizontalAlignment = Alignment.Start) {
                 Text("LOW", style = MaterialTheme.typography.labelSmall, color = TextMuted)
                 Text(
-                    text = "${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(minPrice)}",
+                    text = com.goldsilver.livecalc.util.CurrencyFormatter.formatAmount(minPrice, currency),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     color = AccentRed
@@ -101,7 +101,7 @@ fun HistoryLineChart(
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("CURRENT RATE", style = MaterialTheme.typography.labelSmall, color = TextMuted)
                 Text(
-                    text = "${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(displayPrice)} $currency",
+                    text = com.goldsilver.livecalc.util.CurrencyFormatter.formatCurrency(displayPrice, currency),
                     fontSize = 18.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = lineColor
@@ -110,7 +110,7 @@ fun HistoryLineChart(
             Column(horizontalAlignment = Alignment.End) {
                 Text("HIGH", style = MaterialTheme.typography.labelSmall, color = TextMuted)
                 Text(
-                    text = "${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(maxPrice)}",
+                    text = com.goldsilver.livecalc.util.CurrencyFormatter.formatAmount(maxPrice, currency),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     color = AccentGreen
@@ -380,7 +380,7 @@ fun HistoryLineChart(
                     } else null
 
                     val tooltipDate = SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(selectedPoint.first))
-                    val tooltipRate = "${com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(selectedPoint.second)} $currency${strings.perGram}"
+                    val tooltipRate = "${com.goldsilver.livecalc.util.CurrencyFormatter.formatCurrency(selectedPoint.second, currency)}${strings.perGram}"
                     
                     val dateResult = textMeasurer.measure(
                         text = AnnotatedString(tooltipDate),
@@ -394,7 +394,7 @@ fun HistoryLineChart(
                     val changeString: String
                     val changeColor: Color
                     if (diff != null && diffPercent != null) {
-                        val formattedDiff = com.goldsilver.livecalc.util.IndianCurrencyFormatter.formatAmount(Math.abs(diff))
+                        val formattedDiff = com.goldsilver.livecalc.util.CurrencyFormatter.formatCurrency(Math.abs(diff), currency)
                         val formattedPercent = String.format(Locale.US, "%.2f", Math.abs(diffPercent))
                         if (diff > 0.001) {
                             changeString = "+$formattedDiff (▲ +$formattedPercent%)"

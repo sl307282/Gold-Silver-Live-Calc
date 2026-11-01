@@ -8,6 +8,7 @@ import com.goldsilver.livecalc.GoldSilverApplication
 import com.goldsilver.livecalc.data.local.entities.AlertEntity
 import com.goldsilver.livecalc.data.local.entities.RateEntity
 import com.goldsilver.livecalc.data.local.entities.VerificationEntity
+import com.goldsilver.livecalc.R
 import com.goldsilver.livecalc.ota.OtaResult
 import com.goldsilver.livecalc.ota.OtaState
 import com.goldsilver.livecalc.ota.OtaUpdateManager
@@ -18,10 +19,62 @@ import com.goldsilver.livecalc.ui.theme.isSystemDarkThemeGlobal
 import com.goldsilver.livecalc.ui.theme.selectedThemeGlobal
 import java.util.Locale
 
+enum class Period {
+    D7, D30, Y1
+}
+
+data class UiState(
+    val selectedPeriod: Period = Period.D7,
+    val periodLabelRes: Int = R.string.trend_change_7d,
+    val resolvedLabel: String = "7 Days Change",
+    val takeawaySpan: String = "this week"
+)
+
 class GoldSilverViewModel(application: Application) : AndroidViewModel(application) {
 
     private val app = application as GoldSilverApplication
     private val repository = app.repository
+
+    val selectedPeriod = MutableStateFlow(Period.D7)
+
+    fun setPeriod(period: Period) {
+        selectedPeriod.value = period
+    }
+
+    val uiState: StateFlow<UiState> = selectedPeriod.map { period ->
+        val resId = when (period) {
+            Period.D7 -> R.string.trend_change_7d
+            Period.D30 -> R.string.trend_change_30d
+            Period.Y1 -> R.string.trend_change_1y
+        }
+        val label = when (period) {
+            Period.D7 -> app.getString(R.string.trend_change_7d)
+            Period.D30 -> app.getString(R.string.trend_change_30d)
+            Period.Y1 -> app.getString(R.string.trend_change_1y)
+        }
+        val takeaway = when (period) {
+            Period.D7 -> "this week"
+            Period.D30 -> "this month"
+            Period.Y1 -> "this year"
+        }
+        UiState(
+            selectedPeriod = period,
+            periodLabelRes = resId,
+            resolvedLabel = label,
+            takeawaySpan = takeaway
+        )
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        UiState(
+            selectedPeriod = Period.D7,
+            periodLabelRes = R.string.trend_change_7d,
+            resolvedLabel = "7 Days Change",
+            takeawaySpan = "this week"
+        )
+    )
+
+    val trendsUiState: StateFlow<UiState> = uiState
 
     private val sharedPrefs = application.getSharedPreferences("gold_silver_prefs", Context.MODE_PRIVATE)
 

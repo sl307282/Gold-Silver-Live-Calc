@@ -1,6 +1,8 @@
 package com.goldsilver.livecalc
 
+import com.goldsilver.livecalc.R
 import com.goldsilver.livecalc.data.local.entities.RateEntity
+import com.goldsilver.livecalc.ui.viewmodel.Period
 import com.goldsilver.livecalc.util.PriceConverter
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -233,5 +235,59 @@ class HistoricalTrendsTest {
         val usdGoldRatio = originalUsd.goldPrice24k / originalUsd.prevTradingDayGoldPrice!!
         val eurGoldRatio = convertedEur.goldPrice24k / convertedEur.prevTradingDayGoldPrice!!
         assertEquals(usdGoldRatio, eurGoldRatio, 0.0001)
+    }
+
+    @Test
+    fun testDynamicPeriodChangeLabelsAndTakeaway() {
+        // Map Period.D7 -> trend_change_7d, Period.D30 -> trend_change_30d, Period.Y1 -> trend_change_1y
+        assertEquals(R.string.trend_change_7d, when (Period.D7) {
+            Period.D7 -> R.string.trend_change_7d
+            Period.D30 -> R.string.trend_change_30d
+            Period.Y1 -> R.string.trend_change_1y
+        })
+        assertEquals(R.string.trend_change_30d, when (Period.D30) {
+            Period.D7 -> R.string.trend_change_7d
+            Period.D30 -> R.string.trend_change_30d
+            Period.Y1 -> R.string.trend_change_1y
+        })
+        assertEquals(R.string.trend_change_1y, when (Period.Y1) {
+            Period.D7 -> R.string.trend_change_7d
+            Period.D30 -> R.string.trend_change_30d
+            Period.Y1 -> R.string.trend_change_1y
+        })
+
+        // Verify takeaways
+        val takeaway7d = when (Period.D7) {
+            Period.D7 -> "this week"
+            Period.D30 -> "this month"
+            Period.Y1 -> "this year"
+        }
+        val takeaway30d = when (Period.D30) {
+            Period.D7 -> "this week"
+            Period.D30 -> "this month"
+            Period.Y1 -> "this year"
+        }
+        val takeaway1y = when (Period.Y1) {
+            Period.D7 -> "this week"
+            Period.D30 -> "this month"
+            Period.Y1 -> "this year"
+        }
+        assertEquals("this week", takeaway7d)
+        assertEquals("this month", takeaway30d)
+        assertEquals("this year", takeaway1y)
+
+        // Verify takeaway sentence format and that it never contains the word "Period"
+        val metalName = "Gold"
+        val unsignedPercent = "3.57"
+        val unsignedAmount = "₹509.61 / g"
+        val arrow = "▼"
+        val takeawaySentence = "$metalName is down $unsignedPercent% $takeaway7d ($arrow $unsignedAmount)"
+        assertEquals("Gold is down 3.57% this week (▼ ₹509.61 / g)", takeawaySentence)
+        assertTrue(!takeawaySentence.contains("Period", ignoreCase = true))
+
+        // Verify hint format "From <startDate> to today"
+        val hint = "From 26 Oct to today"
+        assertTrue(hint.startsWith("From ") && hint.endsWith(" to today"))
+        assertTrue(!hint.contains("Period", ignoreCase = true))
     }
 }

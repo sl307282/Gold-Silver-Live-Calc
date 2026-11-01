@@ -36,7 +36,9 @@
     <string name="subtitle_price_alerts">Price alerts</string>
 
     <!-- Historical Trends -->
-    <string name="period_change">Period Change</string>
+    <string name="trend_change_7d">7 Days Change</string>
+    <string name="trend_change_30d">30 Days Change</string>
+    <string name="trend_change_1y">1 Year Change</string>
     <string name="range">Range (High − Low)</string>
     <string name="today">Today</string>
     <string name="daily_rates">Daily Rates</string>

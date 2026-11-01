@@ -181,6 +181,7 @@ fun SettingsScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
                                 .clickable { currencyExpanded = true }
                                 .padding(12.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -192,7 +193,18 @@ fun SettingsScreen(
                                 Text(strings.displayCurrency, color = TextPrimary)
                             }
                             Box {
-                                Text(currency, color = GoldPrimary, fontWeight = FontWeight.Bold)
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text(currency, color = GoldPrimary, fontWeight = FontWeight.Bold)
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowDropDown,
+                                        contentDescription = "Select Currency",
+                                        tint = GoldPrimary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
                                 DropdownMenu(
                                     expanded = currencyExpanded,
                                     onDismissRequest = { currencyExpanded = false }
@@ -216,6 +228,7 @@ fun SettingsScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
                                 .clickable { languageExpanded = true }
                                 .padding(12.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -228,7 +241,18 @@ fun SettingsScreen(
                             }
                             Box {
                                 val currentDisplayName = getSupportedLanguages().firstOrNull { it.first.equals(language, ignoreCase = true) }?.second ?: language
-                                Text(currentDisplayName, color = GoldPrimary, fontWeight = FontWeight.Bold)
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text(currentDisplayName, color = GoldPrimary, fontWeight = FontWeight.Bold)
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowDropDown,
+                                        contentDescription = "Select Language",
+                                        tint = GoldPrimary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
                                 DropdownMenu(
                                     expanded = languageExpanded,
                                     onDismissRequest = { languageExpanded = false }
@@ -275,7 +299,18 @@ fun SettingsScreen(
                                 Text(strings.backgroundTheme, color = TextPrimary)
                             }
                             Box {
-                                Text(backgroundTheme, color = GoldPrimary, fontWeight = FontWeight.Bold)
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text(backgroundTheme, color = GoldPrimary, fontWeight = FontWeight.Bold)
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowDropDown,
+                                        contentDescription = "Select Theme",
+                                        tint = GoldPrimary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
                                 DropdownMenu(
                                     expanded = themeExpanded,
                                     onDismissRequest = { themeExpanded = false }

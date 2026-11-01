@@ -8,6 +8,11 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!-- Queries for BIS CARE app visibility on Android 11+ -->
+    <queries>
+        <package android:name="com.bis.bisapp" />
+    </queries>
+
     <application
         android:name=".GoldSilverApplication"
         android:allowBackup="true"

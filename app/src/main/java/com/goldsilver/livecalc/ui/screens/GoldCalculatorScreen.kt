@@ -45,6 +45,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 @Composable
 fun GoldCalculatorScreen(
     viewModel: GoldSilverViewModel,
+    initialPurity: String = "24K",
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -62,7 +63,7 @@ fun GoldCalculatorScreen(
     // Input states
     var weightInput by remember { mutableStateOf("") }
     var selectedUnit by remember { mutableStateOf("Gram") }
-    var selectedPurity by remember { mutableStateOf("24K") }
+    var selectedPurity by remember(initialPurity) { mutableStateOf(initialPurity) }
     var isPercentageCharge by remember { mutableStateOf(true) }
     var makingChargeInput by remember { mutableStateOf("") }
     var gstInput by remember { mutableStateOf("3") }
@@ -76,9 +77,9 @@ fun GoldCalculatorScreen(
     var hasCalculated by remember { mutableStateOf(false) }
 
     val rate24k = latestRate?.goldPrice24k ?: 76.20
-    val rate22k = latestRate?.goldPrice22k ?: (rate24k * 0.9167)
-    val rate18k = latestRate?.goldPrice18k ?: (rate24k * 0.75)
-    val rate14k = latestRate?.goldPrice14k ?: (rate24k * 0.5833)
+    val rate22k = latestRate?.goldPrice22k ?: (rate24k * com.goldsilver.livecalc.data.model.PurityTable.GOLD_22K.factor)
+    val rate18k = latestRate?.goldPrice18k ?: (rate24k * com.goldsilver.livecalc.data.model.PurityTable.GOLD_18K.factor)
+    val rate14k = latestRate?.goldPrice14k ?: (rate24k * com.goldsilver.livecalc.data.model.PurityTable.GOLD_14K.factor)
 
     val currencySymbol = com.goldsilver.livecalc.util.CurrencyFormatter.getCurrencySymbol(currency).trim()
 

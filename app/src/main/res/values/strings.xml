@@ -59,4 +59,50 @@
     <string name="range_mid">Mid-range</string>
     <string name="range_near_high">Nearer the high</string>
     <string name="range_content_desc">Current price is %1$d%% of the way between the %2$s low %3$s and high %4$s</string>
+
+    <!-- Hallmark Verification -->
+    <string name="hallmark_verification_title">Hallmark Verification</string>
+    <string name="hallmark_intro_title">Verify Hallmark via BIS CARE</string>
+    <string name="hallmark_intro_subtitle">Official app by Bureau of Indian Standards</string>
+    <string name="hallmark_disclaimer">Verification is performed through the official BIS platform. This app does not store or validate HUID records.</string>
+    <string name="huid_input_label">HUID (6 characters)</string>
+    <string name="huid_error_invalid">HUID must be exactly 6 letters or digits</string>
+    <string name="huid_paste_cd">Paste HUID from clipboard</string>
+    <string name="huid_helper_text">Found engraved inside a ring, on a chain clasp or the back of a pendant.</string>
+    <string name="btn_verify_bis_care">Verify in BIS CARE</string>
+    <string name="caption_redirect_bis_care">You\'ll be redirected to the official BIS CARE app.</string>
+    <string name="snackbar_huid_copied">HUID copied — paste it in BIS CARE</string>
+    <string name="snackbar_bis_care_error">Couldn\'t open BIS CARE — install it from the Play Store</string>
+    <string name="action_open">Open</string>
+
+    <!-- How to Read a Hallmark Card -->
+    <string name="hallmark_how_to_read_title">How to read a hallmark</string>
+    <string name="hallmark_mark_bis_logo">BIS logo</string>
+    <string name="hallmark_mark_bis_logo_desc">The triangular BIS standard mark.</string>
+    <string name="hallmark_mark_purity_grade">Purity grade</string>
+    <string name="hallmark_mark_purity_grade_desc">e.g. 22K916, 18K750, 14K585 for gold; 999 / 925 for silver.</string>
+    <string name="hallmark_mark_huid">HUID</string>
+    <string name="hallmark_mark_huid_desc">6-character code unique to this piece.</string>
+    <string name="hallmark_mandatory_caption">All three are mandatory on gold jewellery sold in India since 1 July 2021.</string>
+    <string name="purity_reference_title">Purity Reference</string>
+    <string name="purity_reference_hint">Tap any purity to calculate live price</string>
+    <string name="metal_gold_label">Gold</string>
+    <string name="metal_silver_label">Silver</string>
+    <string name="btn_what_is_huid">What is a HUID?</string>
+    <string name="link_learn_more_bis">Learn more at bis.gov.in</string>
+    <string name="collapse_cd">Collapse</string>
+    <string name="expand_cd">Expand</string>
+
+    <!-- Understanding HUID Bottom Sheet -->
+    <string name="sheet_understanding_huid_title">Understanding HUID</string>
+    <string name="close_cd">Close</string>
+    <string name="sheet_section_definition">HUID (Hallmark Unique Identification) is a 6-character alphanumeric code (e.g. AB12C3) laser-engraved on every BIS-hallmarked gold or silver piece. It is unique to that item and is registered in the BIS database, so it can be traced back to the jeweller and the Assaying &amp; Hallmarking Centre that tested it.</string>
+    <string name="sheet_section_three_marks_title">A valid hallmark has three marks</string>
+    <string name="sheet_section_where_to_find_title">Where to find it</string>
+    <string name="sheet_section_where_to_find_body">Usually on the inside of a ring, the clasp of a chain, or the back of a pendant. It\'s very small — use a magnifier or your phone\'s camera zoom.</string>
+    <string name="sheet_section_how_to_verify_title">How to verify</string>
+    <string name="sheet_step_1">Open the BIS CARE app (official, by Bureau of Indian Standards).</string>
+    <string name="sheet_step_2">Go to \"Verify HUID\" and enter the 6-character code.</string>
+    <string name="sheet_step_3">Match the jeweller name, purity and AHC shown with your bill and the piece.</string>
+    <string name="sheet_disclaimer">This app does not verify HUIDs itself. Verification is done by the official BIS platform.</string>
 </resources>

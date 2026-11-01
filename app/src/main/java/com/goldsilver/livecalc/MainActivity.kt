@@ -16,6 +16,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -190,15 +192,31 @@ class MainActivity : ComponentActivity() {
                                 }
                             )
                         }
-                        composable("gold_calc") {
+                        composable(
+                            route = "gold_calc?purity={purity}",
+                            arguments = listOf(navArgument("purity") {
+                                type = NavType.StringType
+                                defaultValue = "24K"
+                            })
+                        ) { backStackEntry ->
+                            val purity = backStackEntry.arguments?.getString("purity") ?: "24K"
                             GoldCalculatorScreen(
                                 viewModel = viewModel,
+                                initialPurity = purity,
                                 onBack = { navController.popBackStack() }
                             )
                         }
-                        composable("silver_calc") {
+                        composable(
+                            route = "silver_calc?purity={purity}",
+                            arguments = listOf(navArgument("purity") {
+                                type = NavType.StringType
+                                defaultValue = "999"
+                            })
+                        ) { backStackEntry ->
+                            val purity = backStackEntry.arguments?.getString("purity") ?: "999"
                             SilverCalculatorScreen(
                                 viewModel = viewModel,
+                                initialPurity = purity,
                                 onBack = { navController.popBackStack() }
                             )
                         }
@@ -215,9 +233,11 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         composable("hallmark") {
-                            HallmarkVerificationScreen(
-                                viewModel = viewModel,
-                                onBack = { navController.popBackStack() }
+                            HallmarkScreen(
+                                onNavigateToCalculator = { isGold, purity ->
+                                    val route = if (isGold) "gold_calc?purity=$purity" else "silver_calc?purity=$purity"
+                                    navController.navigate(route)
+                                }
                             )
                         }
                         composable("settings") {

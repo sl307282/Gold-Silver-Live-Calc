@@ -45,6 +45,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 @Composable
 fun SilverCalculatorScreen(
     viewModel: GoldSilverViewModel,
+    initialPurity: String = "999",
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -62,7 +63,7 @@ fun SilverCalculatorScreen(
     // Input states
     var weightInput by remember { mutableStateOf("") }
     var selectedUnit by remember { mutableStateOf("Gram") }
-    var selectedPurity by remember { mutableStateOf("999") }
+    var selectedPurity by remember(initialPurity) { mutableStateOf(initialPurity) }
     var isPercentageCharge by remember { mutableStateOf(true) }
     var makingChargeInput by remember { mutableStateOf("") }
     var gstInput by remember { mutableStateOf("3") }
@@ -77,7 +78,7 @@ fun SilverCalculatorScreen(
 
     val baseSilverPrice = latestRate?.silverPrice ?: 0.96
     val price999 = baseSilverPrice
-    val price925 = baseSilverPrice * 0.925
+    val price925 = baseSilverPrice * com.goldsilver.livecalc.data.model.PurityTable.SILVER_925.factor
     val price900 = baseSilverPrice * 0.90
 
     val currencySymbol = com.goldsilver.livecalc.util.CurrencyFormatter.getCurrencySymbol(currency).trim()

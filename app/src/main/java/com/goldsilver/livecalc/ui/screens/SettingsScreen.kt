@@ -9,6 +9,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
+import com.goldsilver.livecalc.ui.components.LocalTabReselectFlow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -94,6 +96,18 @@ fun SettingsScreen(
     var languageExpanded by remember { mutableStateOf(false) }
     var themeExpanded by remember { mutableStateOf(false) }
 
+    val tabReselectFlow = LocalTabReselectFlow.current
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(Unit) {
+        listState.scrollToItem(0)
+        tabReselectFlow.collect { route ->
+            if (route == "settings") {
+                listState.scrollToItem(0)
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -118,6 +132,7 @@ fun SettingsScreen(
         modifier = modifier
     ) { innerPadding ->
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(top = innerPadding.calculateTopPadding())

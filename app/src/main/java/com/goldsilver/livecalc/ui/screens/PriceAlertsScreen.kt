@@ -108,6 +108,10 @@ fun PriceAlertsScreen(
     val focusManager = LocalFocusManager.current
     val listState = rememberLazyListState()
 
+    LaunchedEffect(Unit) {
+        listState.scrollToItem(0)
+    }
+
     val submitAlert: () -> Unit = {
         val price = com.goldsilver.livecalc.util.CurrencyFormatter.parseAmount(targetPriceInput)
         if (price > 0) {

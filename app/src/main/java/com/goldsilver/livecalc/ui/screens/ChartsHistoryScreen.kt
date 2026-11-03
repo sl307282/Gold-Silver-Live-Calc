@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import com.goldsilver.livecalc.ui.components.LocalTabReselectFlow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -274,6 +275,19 @@ fun ChartsHistoryScreen(
                 ) {
                     collapseOffset = value
                 }
+            }
+        }
+    }
+
+    val tabReselectFlow = LocalTabReselectFlow.current
+
+    LaunchedEffect(Unit) {
+        listState.scrollToItem(0)
+        collapseOffset = 0f
+        tabReselectFlow.collect { route ->
+            if (route == "charts") {
+                collapseOffset = 0f
+                listState.scrollToItem(0)
             }
         }
     }

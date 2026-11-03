@@ -56,6 +56,11 @@ fun SilverCalculatorScreen(
     val currency by viewModel.currency.collectAsStateWithLifecycle()
     val focusManager = LocalFocusManager.current
     val scrollState = rememberScrollState()
+
+    LaunchedEffect(Unit) {
+        scrollState.scrollTo(0)
+    }
+
     val rateRequester = remember { BringIntoViewRequester() }
     val weightRequester = remember { BringIntoViewRequester() }
     val makingRequester = remember { BringIntoViewRequester() }

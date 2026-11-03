@@ -18,6 +18,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -26,11 +28,24 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import com.goldsilver.livecalc.ui.theme.GoldPrimary
 import com.goldsilver.livecalc.util.LocalAppStrings
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.only
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.launch
+
+/**
+ * Event broadcast when an active bottom navigation tab is tapped/reselected.
+ * Value emitted is the route string (e.g. "dashboard", "charts", "hallmark", "settings").
+ */
+val LocalTabReselectFlow = staticCompositionLocalOf<MutableSharedFlow<String>> {
+    MutableSharedFlow()
+}
 
 data class NavItem(
     val route: String,
@@ -40,8 +55,58 @@ data class NavItem(
 
 @Composable
 fun CustomBottomNavigation(
+    navController: NavController,
+    currentRoute: String,
+    modifier: Modifier = Modifier,
+    backgroundAlpha: Float = 0.88f
+) {
+    val tabReselectFlow = LocalTabReselectFlow.current
+    val coroutineScope = rememberCoroutineScope()
+
+    CustomBottomNavigationContent(
+        currentRoute = currentRoute,
+        onItemClick = { itemRoute ->
+            if (currentRoute == itemRoute) {
+                // User reselected the active tab -> broadcast scroll to top event
+                coroutineScope.launch {
+                    tabReselectFlow.emit(itemRoute)
+                }
+            } else {
+                // Navigate to a new tab: do NOT save state or restore state, always open fresh at top
+                navController.navigate(itemRoute) {
+                    popUpTo(navController.graph.findStartDestination().id) {
+                        saveState = false
+                        inclusive = false
+                    }
+                    launchSingleTop = true
+                    restoreState = false
+                }
+            }
+        },
+        modifier = modifier,
+        backgroundAlpha = backgroundAlpha
+    )
+}
+
+@Composable
+fun CustomBottomNavigation(
     currentRoute: String,
     onNavigate: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    backgroundAlpha: Float = 0.88f
+) {
+    CustomBottomNavigationContent(
+        currentRoute = currentRoute,
+        onItemClick = onNavigate,
+        modifier = modifier,
+        backgroundAlpha = backgroundAlpha
+    )
+}
+
+@Composable
+private fun CustomBottomNavigationContent(
+    currentRoute: String,
+    onItemClick: (String) -> Unit,
     modifier: Modifier = Modifier,
     backgroundAlpha: Float = 0.88f
 ) {
@@ -99,7 +164,7 @@ fun CustomBottomNavigation(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null
                             ) {
-                                onNavigate(item.route)
+                                onItemClick(item.route)
                             }
                             .padding(vertical = 2.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,

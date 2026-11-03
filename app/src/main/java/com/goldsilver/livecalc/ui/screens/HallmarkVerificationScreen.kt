@@ -15,9 +15,11 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import com.goldsilver.livecalc.ui.components.LocalTabReselectFlow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -84,6 +86,18 @@ fun HallmarkScreen(
         animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing),
         label = "chevronRotation"
     )
+
+    val tabReselectFlow = LocalTabReselectFlow.current
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(Unit) {
+        listState.scrollToItem(0)
+        tabReselectFlow.collect { route ->
+            if (route == "hallmark") {
+                listState.scrollToItem(0)
+            }
+        }
+    }
 
     // ── Bottom Sheet: Understanding HUID ──────────────────────────────────────
     if (showHuidSheet) {
@@ -153,6 +167,7 @@ fun HallmarkScreen(
         modifier = modifier
     ) { innerPadding ->
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(top = innerPadding.calculateTopPadding())

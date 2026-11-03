@@ -8,6 +8,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
+import com.goldsilver.livecalc.ui.components.LocalTabReselectFlow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -65,6 +67,18 @@ fun HomeDashboardScreen(
         } ?: "..."
     }
 
+    val tabReselectFlow = LocalTabReselectFlow.current
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(Unit) {
+        listState.scrollToItem(0)
+        tabReselectFlow.collect { route ->
+            if (route == "dashboard") {
+                listState.scrollToItem(0)
+            }
+        }
+    }
+
     Scaffold(
         containerColor = DarkBackground,
         contentWindowInsets = WindowInsets.statusBars,
@@ -115,6 +129,7 @@ fun HomeDashboardScreen(
             }
 
             LazyColumn(
+                state = listState,
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 contentPadding = PaddingValues(top = 0.dp, bottom = bottomBarPadding + 16.dp)

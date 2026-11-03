@@ -24,6 +24,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.goldsilver.livecalc.ui.components.AppUpdateDialog
 import com.goldsilver.livecalc.ui.components.CustomBottomNavigation
+import com.goldsilver.livecalc.ui.components.LocalTabReselectFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import com.goldsilver.livecalc.ui.screens.*
 import com.goldsilver.livecalc.ui.theme.*
 import com.goldsilver.livecalc.ui.viewmodel.GoldSilverViewModel
@@ -160,50 +162,41 @@ class MainActivity : AppCompatActivity() {
                     "settings"
                 )
 
-                Scaffold(
-                    modifier = Modifier.fillMaxSize(),
-                    containerColor = DarkBackground,
-                    contentWindowInsets = WindowInsets(0, 0, 0, 0),
-                    bottomBar = {
-                        if (showBottomBar) {
-                            CustomBottomNavigation(
-                                currentRoute = currentRoute,
-                                onNavigate = { route ->
-                                    navController.navigate(route) {
-                                        // Pop up to the start destination of the graph to
-                                        // avoid building up a large stack of destinations
-                                        popUpTo("dashboard") {
-                                            saveState = true
-                                        }
-                                        // Avoid multiple copies of the same destination when
-                                        // reselecting the same item
-                                        launchSingleTop = true
-                                        // Restore state when reselecting a previously selected item
-                                        restoreState = true
-                                    }
-                                }
-                            )
+                val tabReselectFlow = remember { MutableSharedFlow<String>(extraBufferCapacity = 1) }
+
+                CompositionLocalProvider(LocalTabReselectFlow provides tabReselectFlow) {
+                    Scaffold(
+                        modifier = Modifier.fillMaxSize(),
+                        containerColor = DarkBackground,
+                        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+                        bottomBar = {
+                            if (showBottomBar) {
+                                CustomBottomNavigation(
+                                    navController = navController,
+                                    currentRoute = currentRoute
+                                )
+                            }
                         }
-                    }
-                ) { innerPadding ->
-                    val safeNavigateBack: () -> Unit = remember(navController) {
-                        var lastClickTime = 0L
-                        {
-                            val now = android.os.SystemClock.elapsedRealtime()
-                            if (now - lastClickTime > 500L) {
-                                lastClickTime = now
-                                if (!navController.popBackStack()) {
-                                    navController.navigate("dashboard") {
-                                        popUpTo("dashboard") {
-                                            saveState = true
+                    ) { innerPadding ->
+                        val safeNavigateBack: () -> Unit = remember(navController) {
+                            var lastClickTime = 0L
+                            {
+                                val now = android.os.SystemClock.elapsedRealtime()
+                                if (now - lastClickTime > 500L) {
+                                    lastClickTime = now
+                                    if (!navController.popBackStack()) {
+                                        navController.navigate("dashboard") {
+                                            popUpTo("dashboard") {
+                                                saveState = false
+                                                inclusive = false
+                                            }
+                                            launchSingleTop = true
+                                            restoreState = false
                                         }
-                                        launchSingleTop = true
-                                        restoreState = true
                                     }
                                 }
                             }
                         }
-                    }
 
                     val bottomBarPadding = innerPadding.calculateBottomPadding()
 
@@ -284,5 +277,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
+}
 }
 }

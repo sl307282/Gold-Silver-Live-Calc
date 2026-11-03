@@ -7,7 +7,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
@@ -40,8 +45,11 @@ import com.goldsilver.livecalc.util.CurrencyFormatter
 import java.text.SimpleDateFormat
 import java.util.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.res.stringResource
+import com.goldsilver.livecalc.R
 
-private val AlertsPrimary = Color(0xFF38BDF8) // Vibrant Sapphire / Sky Blue
+private val AlertsPrimary: Color
+    get() = if (isSystemDarkThemeGlobal) Color(0xFF38BDF8) else Color(0xFF0284C7)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -96,25 +104,92 @@ fun PriceAlertsScreen(
         }
     }
 
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+    val listState = rememberLazyListState()
+
+    val submitAlert: () -> Unit = {
+        val price = com.goldsilver.livecalc.util.CurrencyFormatter.parseAmount(targetPriceInput)
+        if (price > 0) {
+            val selectedMetal = if (isGold) "GOLD" else "SILVER"
+            val metalLabel = if (isGold) context.getString(R.string.metal_gold) else context.getString(R.string.metal_silver)
+            val selectedCondition = if (isAboveCondition) "ABOVE" else "BELOW"
+            val conditionLabel = if (isAboveCondition) context.getString(R.string.rises_above) else context.getString(R.string.falls_below)
+            val formattedPrice = com.goldsilver.livecalc.util.CurrencyFormatter.formatCurrency(price, currency)
+
+            // Check if duplicate alert exists for same metal, target price, and condition
+            val isDuplicate = activeAlerts.any { alert ->
+                alert.metal.equals(selectedMetal, ignoreCase = true) &&
+                alert.condition.equals(selectedCondition, ignoreCase = true) &&
+                Math.abs(alert.targetPrice - price) < 0.001
+            }
+
+            if (isDuplicate) {
+                // Show Duplicate Alert Popup
+                val duplicateMsg = context.getString(R.string.alert_duplicate_toast)
+                android.widget.Toast.makeText(context, "⚠️ $duplicateMsg", android.widget.Toast.LENGTH_LONG).show()
+                alertDialogData = AlertDialogData(
+                    title = context.getString(R.string.alert_duplicate_title),
+                    message = context.getString(R.string.alert_duplicate_message, metalLabel, conditionLabel, formattedPrice),
+                    isSuccess = false
+                )
+            } else if (!isPremium && activeAlerts.size >= 1) {
+                // Verify monetization limits: max 1 alert for free tier
+                showLimitDialog = true
+            } else {
+                // Save new Alert
+                viewModel.addAlert(
+                    metal = selectedMetal,
+                    targetPrice = price,
+                    condition = selectedCondition
+                )
+                targetPriceInput = ""
+                keyboardController?.hide()
+                focusManager.clearFocus()
+
+                // Show Success Popup
+                val successMsg = context.getString(R.string.alert_success_toast, formattedPrice)
+                android.widget.Toast.makeText(context, "✅ $successMsg", android.widget.Toast.LENGTH_LONG).show()
+                alertDialogData = AlertDialogData(
+                    title = context.getString(R.string.alert_success_title),
+                    message = context.getString(R.string.alert_success_message, formattedPrice, conditionLabel, metalLabel),
+                    isSuccess = true
+                )
+            }
+        } else {
+            android.widget.Toast.makeText(context, context.getString(R.string.alert_invalid_price), android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(strings.priceAlertsTitle, color = AlertsPrimary, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = strings.back, tint = AlertsPrimary)
+                    IconButton(
+                        onClick = onBack,
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.navigate_back),
+                            tint = AlertsPrimary
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBackground)
             )
         },
         containerColor = DarkBackground,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         modifier = modifier
     ) { innerPadding ->
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
+                .padding(top = innerPadding.calculateTopPadding())
+                .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -279,7 +354,7 @@ fun PriceAlertsScreen(
                         modifier = Modifier.padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        Text("Create Price Alert", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        Text(stringResource(R.string.create_price_alert), color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 15.sp)
 
                         // Metal select
                         Row(
@@ -316,7 +391,7 @@ fun PriceAlertsScreen(
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "Gold",
+                                        text = stringResource(R.string.metal_gold),
                                         color = if (isGold) DarkBackground else (if (isDark) Color.White else Color(0xFF1E293B)),
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 14.sp
@@ -352,7 +427,7 @@ fun PriceAlertsScreen(
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "Silver",
+                                        text = stringResource(R.string.metal_silver),
                                         color = if (!isGold) DarkBackground else (if (isDark) Color.White else Color(0xFF1E293B)),
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 14.sp
@@ -396,7 +471,7 @@ fun PriceAlertsScreen(
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "Goes Below (≤)",
+                                        text = stringResource(R.string.falls_below),
                                         color = if (!isAboveCondition) Color(0xFF0F172A) else (if (isDark) Color.White else Color(0xFF1E293B)),
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 13.5.sp
@@ -432,7 +507,7 @@ fun PriceAlertsScreen(
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "Goes Above (≥)",
+                                        text = stringResource(R.string.rises_above),
                                         color = if (isAboveCondition) Color(0xFF0F172A) else (if (isDark) Color.White else Color(0xFF1E293B)),
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 13.5.sp
@@ -445,8 +520,14 @@ fun PriceAlertsScreen(
                         OutlinedTextField(
                             value = targetPriceInput,
                             onValueChange = { targetPriceInput = com.goldsilver.livecalc.util.CurrencyFormatter.formatInput(it, currency) },
-                            label = { Text("Target Price ($currency/Gram)") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            label = { Text(stringResource(R.string.target_price_format, currency)) },
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Decimal,
+                                imeAction = ImeAction.Done
+                            ),
+                            keyboardActions = KeyboardActions(
+                                onDone = { submitAlert() }
+                            ),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedBorderColor = AlertsPrimary,
                                 focusedLabelColor = AlertsPrimary,
@@ -460,60 +541,11 @@ fun PriceAlertsScreen(
 
                         // Save Alert Button
                         Button(
-                            onClick = {
-                                val price = com.goldsilver.livecalc.util.CurrencyFormatter.parseAmount(targetPriceInput)
-                                if (price > 0) {
-                                    val selectedMetal = if (isGold) "GOLD" else "SILVER"
-                                    val metalLabel = if (isGold) "Gold" else "Silver"
-                                    val selectedCondition = if (isAboveCondition) "ABOVE" else "BELOW"
-                                    val conditionLabel = if (isAboveCondition) "Goes Above (≥)" else "Goes Below (≤)"
-                                    val formattedPrice = com.goldsilver.livecalc.util.CurrencyFormatter.formatCurrency(price, currency)
-
-                                    // Check if duplicate alert exists for same metal, target price, and condition
-                                    val isDuplicate = activeAlerts.any { alert ->
-                                        alert.metal.equals(selectedMetal, ignoreCase = true) &&
-                                        alert.condition.equals(selectedCondition, ignoreCase = true) &&
-                                        Math.abs(alert.targetPrice - price) < 0.001
-                                    }
-
-                                    if (isDuplicate) {
-                                        // Show Duplicate Alert Popup
-                                        val duplicateMsg = "Target price already set"
-                                        android.widget.Toast.makeText(context, "⚠️ $duplicateMsg", android.widget.Toast.LENGTH_LONG).show()
-                                        alertDialogData = AlertDialogData(
-                                            title = "Target Price Already Set",
-                                            message = "A price alert for $metalLabel ($conditionLabel) at $formattedPrice/g is already set and active.",
-                                            isSuccess = false
-                                        )
-                                    } else if (!isPremium && activeAlerts.size >= 1) {
-                                        // Verify monetization limits: max 1 alert for free tier
-                                        showLimitDialog = true
-                                    } else {
-                                        // Save new Alert
-                                        viewModel.addAlert(
-                                            metal = selectedMetal,
-                                            targetPrice = price,
-                                            condition = selectedCondition
-                                        )
-                                        targetPriceInput = ""
-
-                                        // Show Success Popup
-                                        val successMsg = "Target price $formattedPrice set successfully"
-                                        android.widget.Toast.makeText(context, "✅ $successMsg", android.widget.Toast.LENGTH_LONG).show()
-                                        alertDialogData = AlertDialogData(
-                                            title = "Target Price Set Successfully",
-                                            message = "Target price $formattedPrice/g ($conditionLabel) set successfully for $metalLabel.",
-                                            isSuccess = true
-                                        )
-                                    }
-                                } else {
-                                    android.widget.Toast.makeText(context, "Please enter a valid target price", android.widget.Toast.LENGTH_SHORT).show()
-                                }
-                            },
+                            onClick = submitAlert,
                             colors = ButtonDefaults.buttonColors(containerColor = AlertsPrimary),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("Set Alert", color = DarkBackground, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.btn_set_alert), color = DarkBackground, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -524,7 +556,7 @@ fun PriceAlertsScreen(
             // Active Alerts Section
             item {
                 Text(
-                    text = "ACTIVE ALERTS (${activeAlerts.size})",
+                    text = stringResource(R.string.active_alerts_count, activeAlerts.size),
                     style = MaterialTheme.typography.labelSmall,
                     color = TextMuted,
                     fontWeight = FontWeight.Bold
@@ -534,7 +566,7 @@ fun PriceAlertsScreen(
             if (activeAlerts.isEmpty()) {
                 item {
                     Text(
-                        text = "No active alerts. We'll monitor prices in the background and notify you when they hit your targets.",
+                        text = stringResource(R.string.no_active_alerts),
                         color = TextSecondary,
                         fontSize = 13.sp,
                         modifier = Modifier.padding(vertical = 8.dp)
@@ -564,11 +596,11 @@ fun PriceAlertsScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Lock, contentDescription = "Lock", tint = AlertsPrimary)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Multiple Alerts Limit")
+                    Text(stringResource(R.string.limit_dialog_title))
                 }
             },
             text = {
-                Text("Free users can set only 1 active alert at a time. Upgrade to Premium for unlimited target alerts in the background!")
+                Text(stringResource(R.string.limit_dialog_message))
             },
             confirmButton = {
                 Button(
@@ -578,12 +610,12 @@ fun PriceAlertsScreen(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = AlertsPrimary)
                 ) {
-                    Text("Unlock Premium", color = DarkBackground)
+                    Text(stringResource(R.string.unlock_premium), color = DarkBackground)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showLimitDialog = false }) {
-                    Text("Close", color = TextSecondary)
+                    Text(stringResource(R.string.btn_close), color = TextSecondary)
                 }
             }
         )
@@ -623,7 +655,7 @@ fun PriceAlertsScreen(
                         containerColor = if (data.isSuccess) Color(0xFF10B981) else AlertsPrimary
                     )
                 ) {
-                    Text("OK", color = DarkBackground, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.btn_ok), color = DarkBackground, fontWeight = FontWeight.Bold)
                 }
             },
             containerColor = DarkSurface,
@@ -645,7 +677,7 @@ fun AlertItem(
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val metalName = if (alert.metal == "GOLD") "Gold 24K" else "Silver"
+    val metalName = if (alert.metal == "GOLD") "${stringResource(R.string.metal_gold)} 24K" else stringResource(R.string.metal_silver)
     val metalColor = if (alert.metal == "GOLD") GoldPrimary else SilverPrimary
     val conditionSymbol = if (alert.condition == "ABOVE") "≥" else "≤"
 
@@ -674,7 +706,7 @@ fun AlertItem(
             ) {
                 Icon(
                     imageVector = Icons.Default.NotificationsActive,
-                    contentDescription = "Alert",
+                    contentDescription = stringResource(R.string.alert_content_desc),
                     tint = if (alert.isActive) metalColor else TextMuted,
                     modifier = Modifier.size(24.dp)
                 )
@@ -691,9 +723,9 @@ fun AlertItem(
                     val createdDate = Date(alert.createdAt)
                     val statusText = if (alert.triggeredAt != null) {
                         val triggeredDate = Date(alert.triggeredAt)
-                        "Created: ${sdf.format(createdDate)}\nLast Hit: ${sdf.format(triggeredDate)}"
+                        stringResource(R.string.alert_created_and_hit, sdf.format(createdDate), sdf.format(triggeredDate))
                     } else {
-                        "Created: ${sdf.format(createdDate)}"
+                        stringResource(R.string.alert_created_at, sdf.format(createdDate))
                     }
 
                     Text(
@@ -713,7 +745,7 @@ fun AlertItem(
             ) {
                 Icon(
                     imageVector = Icons.Default.Delete,
-                    contentDescription = "Delete Alert",
+                    contentDescription = stringResource(R.string.delete_alert_cd),
                     tint = AccentRed,
                     modifier = Modifier.size(22.dp)
                 )

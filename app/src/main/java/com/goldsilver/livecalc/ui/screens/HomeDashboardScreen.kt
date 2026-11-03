@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.goldsilver.livecalc.ui.components.PriceChangeIndicator
@@ -37,13 +38,16 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.res.stringResource
+import com.goldsilver.livecalc.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeDashboardScreen(
     viewModel: GoldSilverViewModel,
     onNavigate: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    bottomBarPadding: Dp = 80.dp
 ) {
     val strings = LocalAppStrings.current
     val latestRate by viewModel.latestRate.collectAsStateWithLifecycle()
@@ -63,12 +67,13 @@ fun HomeDashboardScreen(
 
     Scaffold(
         containerColor = DarkBackground,
+        contentWindowInsets = WindowInsets.statusBars,
         modifier = modifier
     ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
+                .padding(top = innerPadding.calculateTopPadding())
                 .padding(horizontal = 16.dp)
         ) {
             // Compact Header Row
@@ -112,7 +117,7 @@ fun HomeDashboardScreen(
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
-                contentPadding = PaddingValues(bottom = 32.dp)
+                contentPadding = PaddingValues(top = 0.dp, bottom = bottomBarPadding + 16.dp)
             ) {
                 item {
                     Spacer(modifier = Modifier.height(2.dp))
@@ -124,25 +129,26 @@ fun HomeDashboardScreen(
                         val prevGoldPrice = rate.prevTradingDayGoldPrice ?: previousRate?.goldPrice24k
                         val goldDiffAmount = if (prevGoldPrice != null && prevGoldPrice > 0) rate.goldPrice24k - prevGoldPrice else null
 
+                        val weight10gStr = stringResource(R.string.weight_10g)
                         MetalRateCard(
-                            title = "Gold (XAU)",
+                            title = stringResource(R.string.gold_xau),
                             primaryPrice = "${CurrencyFormatter.formatCurrency(rate.goldPrice24k, currency)} / g",
-                            headlineFigure = "10 g · ${CurrencyFormatter.formatCurrency(rate.goldPrice24k * 10, currency)}",
+                            headlineFigure = "$weight10gStr · ${CurrencyFormatter.formatCurrency(rate.goldPrice24k * 10, currency)}",
                             changePercent = goldChange,
                             diffAmount = goldDiffAmount,
                             currency = currency,
                             isGold = true,
                             purityList = listOf(
-                                "24K (99.9%)" to rate.goldPrice24k,
-                                "22K (91.6%)" to rate.goldPrice22k,
-                                "18K (75.0%)" to rate.goldPrice18k,
-                                "14K (58.3%)" to rate.goldPrice14k
+                                stringResource(R.string.purity_gold_24k) to rate.goldPrice24k,
+                                stringResource(R.string.purity_gold_22k) to rate.goldPrice22k,
+                                stringResource(R.string.purity_gold_18k) to rate.goldPrice18k,
+                                stringResource(R.string.purity_gold_14k) to rate.goldPrice14k
                             ),
                             weightList = listOf(
-                                "1 g" to rate.goldPrice24k,
-                                "10 g" to rate.goldPrice24k * 10,
-                                "1 tola (11.66 g)" to rate.goldPrice24k * 11.6638,
-                                "1 kg" to rate.goldPrice24k * 1000
+                                stringResource(R.string.weight_1g) to rate.goldPrice24k,
+                                weight10gStr to rate.goldPrice24k * 10,
+                                stringResource(R.string.weight_1tola) to rate.goldPrice24k * 11.6638,
+                                stringResource(R.string.weight_1kg) to rate.goldPrice24k * 1000
                             ),
                             onCardClick = { onNavigate("gold_calc") }
                         )
@@ -170,23 +176,24 @@ fun HomeDashboardScreen(
                         val prevSilverPrice = rate.prevTradingDaySilverPrice ?: previousRate?.silverPrice
                         val silverDiffAmount = if (prevSilverPrice != null && prevSilverPrice > 0) rate.silverPrice - prevSilverPrice else null
 
+                        val weight1kgStr = stringResource(R.string.weight_1kg)
                         MetalRateCard(
-                            title = "Silver (XAG)",
+                            title = stringResource(R.string.silver_xag),
                             primaryPrice = "${CurrencyFormatter.formatCurrency(rate.silverPrice, currency)} / g",
-                            headlineFigure = "1 kg · ${CurrencyFormatter.formatCurrency(rate.silverPrice * 1000, currency)}",
+                            headlineFigure = "$weight1kgStr · ${CurrencyFormatter.formatCurrency(rate.silverPrice * 1000, currency)}",
                             changePercent = silverChange,
                             diffAmount = silverDiffAmount,
                             currency = currency,
                             isGold = false,
                             purityList = listOf(
-                                "999" to rate.silverPrice,
-                                "925 (Sterling)" to rate.silverPrice * 0.925
+                                stringResource(R.string.purity_silver_999) to rate.silverPrice,
+                                stringResource(R.string.purity_silver_925) to rate.silverPrice * 0.925
                             ),
                             weightList = listOf(
-                                "1 g" to rate.silverPrice,
-                                "10 g" to rate.silverPrice * 10,
-                                "1 tola (11.66 g)" to rate.silverPrice * 11.6638,
-                                "1 kg" to rate.silverPrice * 1000
+                                stringResource(R.string.weight_1g) to rate.silverPrice,
+                                stringResource(R.string.weight_10g) to rate.silverPrice * 10,
+                                stringResource(R.string.weight_1tola) to rate.silverPrice * 11.6638,
+                                weight1kgStr to rate.silverPrice * 1000
                             ),
                             onCardClick = { onNavigate("silver_calc") }
                         )
@@ -225,8 +232,8 @@ fun HomeDashboardScreen(
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             QuickActionButton(
-                                title = "Gold Calculator",
-                                subtitle = "Calculate price",
+                                title = stringResource(R.string.title_gold_calc),
+                                subtitle = stringResource(R.string.subtitle_calc_price),
                                 icon = Icons.Filled.Calculate,
                                 backgroundBrush = Brush.linearGradient(
                                     colors = listOf(
@@ -242,8 +249,8 @@ fun HomeDashboardScreen(
                                 modifier = Modifier.weight(1f)
                             )
                             QuickActionButton(
-                                title = "Silver Calculator",
-                                subtitle = "Calculate price",
+                                title = stringResource(R.string.title_silver_calc),
+                                subtitle = stringResource(R.string.subtitle_calc_price),
                                 icon = Icons.Filled.Calculate,
                                 backgroundBrush = Brush.linearGradient(
                                     colors = listOf(
@@ -264,8 +271,8 @@ fun HomeDashboardScreen(
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             QuickActionButton(
-                                title = "Hallmark",
-                                subtitle = "Verify purity",
+                                title = stringResource(R.string.title_hallmark),
+                                subtitle = stringResource(R.string.subtitle_verify_purity),
                                 icon = Icons.Filled.CheckCircle,
                                 backgroundBrush = Brush.linearGradient(
                                     colors = listOf(
@@ -281,8 +288,8 @@ fun HomeDashboardScreen(
                                 modifier = Modifier.weight(1f)
                             )
                             QuickActionButton(
-                                title = "Alerts",
-                                subtitle = "Price alerts",
+                                title = stringResource(R.string.title_alerts),
+                                subtitle = stringResource(R.string.subtitle_price_alerts),
                                 icon = Icons.Filled.Notifications,
                                 backgroundBrush = Brush.linearGradient(
                                     colors = listOf(
@@ -299,10 +306,6 @@ fun HomeDashboardScreen(
                             )
                         }
                     }
-                }
-
-                item {
-                    Spacer(modifier = Modifier.height(16.dp))
                 }
             }
         }
@@ -445,7 +448,7 @@ fun MetalRateCard(
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "$arrow $absDiff ($pctStr%) ${strings.vsYesterday}",
+                        text = "$arrow $absDiff ($pctStr%) " + stringResource(R.string.vs_yesterday),
                         color = color,
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold
@@ -460,7 +463,7 @@ fun MetalRateCard(
 
                 // Section 1: PURITY
                 Text(
-                    text = strings.sectionPurity,
+                    text = stringResource(R.string.section_purity),
                     color = TextMuted,
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
@@ -477,7 +480,7 @@ fun MetalRateCard(
 
                 // Section 2: WEIGHT
                 Text(
-                    text = strings.sectionWeight,
+                    text = stringResource(R.string.section_weight),
                     color = TextMuted,
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
@@ -502,7 +505,7 @@ fun MetalRateCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = if (isExpanded) strings.showLess else strings.showBreakdown,
+                    text = if (isExpanded) stringResource(R.string.show_less) else stringResource(R.string.show_breakdown),
                     color = themeColor,
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold

@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -29,8 +30,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.util.Calendar
@@ -44,17 +53,26 @@ import com.goldsilver.livecalc.ui.viewmodel.GoldSilverViewModel
 import com.goldsilver.livecalc.ui.viewmodel.Period
 import com.goldsilver.livecalc.util.LocalAppStrings
 import com.goldsilver.livecalc.util.PriceConverter
+import androidx.compose.ui.res.stringResource
+import com.goldsilver.livecalc.R
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+
+private fun lerpDp(start: Dp, stop: Dp, fraction: Float): Dp =
+    (start.value + (stop.value - start.value) * fraction).dp
+
+private fun lerpSp(start: Float, stop: Float, fraction: Float): TextUnit =
+    (start + (stop - start) * fraction).sp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChartsHistoryScreen(
     viewModel: GoldSilverViewModel,
     onBack: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    bottomBarPadding: Dp = 80.dp
 ) {
     val strings = LocalAppStrings.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -184,6 +202,82 @@ fun ChartsHistoryScreen(
         }
     }
 
+    val density = LocalDensity.current
+    val collapseRangeDp = 68.dp
+    val collapseRangePx = with(density) { collapseRangeDp.toPx() }
+
+    var collapseOffset by remember { mutableFloatStateOf(0f) }
+    val collapseFraction by remember {
+        derivedStateOf {
+            if (collapseRangePx > 0f) (collapseOffset / collapseRangePx).coerceIn(0f, 1f) else 0f
+        }
+    }
+
+    val coroutineScope = rememberCoroutineScope()
+    val nestedScrollConnection = remember(collapseRangePx) {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                val delta = available.y
+                if (delta < 0f) {
+                    // Scrolling up (content moving up): collapse header
+                    val prevOffset = collapseOffset
+                    val newOffset = (prevOffset - delta).coerceIn(0f, collapseRangePx)
+                    val consumed = prevOffset - newOffset
+                    collapseOffset = newOffset
+                    return Offset(0f, consumed)
+                }
+                if (delta > 0f && collapseOffset > 0f) {
+                    // Scrolling down (content moving down): expand header (enterAlways)
+                    val prevOffset = collapseOffset
+                    val newOffset = (prevOffset - delta).coerceIn(0f, collapseRangePx)
+                    val consumed = prevOffset - newOffset
+                    collapseOffset = newOffset
+                    return Offset(0f, consumed)
+                }
+                return Offset.Zero
+            }
+
+            override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+                if (collapseOffset > 0f && collapseOffset < collapseRangePx) {
+                    val target = when {
+                        available.y < -300f -> collapseRangePx
+                        available.y > 300f -> 0f
+                        collapseOffset > collapseRangePx / 2f -> collapseRangePx
+                        else -> 0f
+                    }
+                    val anim = Animatable(collapseOffset)
+                    anim.animateTo(
+                        targetValue = target,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                        )
+                    ) {
+                        collapseOffset = value
+                    }
+                }
+                return super.onPostFling(consumed, available)
+            }
+        }
+    }
+
+    LaunchedEffect(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset) {
+        if (listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0) {
+            if (collapseOffset > 0f && !listState.isScrollInProgress) {
+                val anim = Animatable(collapseOffset)
+                anim.animateTo(
+                    targetValue = 0f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioNoBouncy,
+                        stiffness = Spring.StiffnessMediumLow
+                    )
+                ) {
+                    collapseOffset = value
+                }
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             Column(
@@ -201,10 +295,13 @@ fun ChartsHistoryScreen(
                         )
                     },
                     navigationIcon = {
-                        IconButton(onClick = onBack) {
+                        IconButton(
+                            onClick = onBack,
+                            modifier = Modifier.size(48.dp)
+                        ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = strings.back,
+                                contentDescription = stringResource(R.string.navigate_back),
                                 tint = GoldPrimary
                             )
                         }
@@ -231,33 +328,43 @@ fun ChartsHistoryScreen(
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBackground)
                 )
 
-                // Gold / Silver Segmented Toggle (Pinned, 48 dp min height)
+                // Toggle & Period layout interpolated by collapseFraction
+                val toggleHeight = lerpDp(48.dp, 34.dp, collapseFraction)
+                val togglePadding = lerpDp(3.dp, 2.dp, collapseFraction)
+                val toggleCornerRadius = lerpDp(10.dp, 8.dp, collapseFraction)
+                val toggleInnerCornerRadius = lerpDp(8.dp, 6.dp, collapseFraction)
+                val toggleTextSize = lerpSp(14f, 12f, collapseFraction)
+                val toggleSpacerBelow = lerpDp(10.dp, 0.dp, collapseFraction)
+                val periodHeight = lerpDp(40.dp, 0.dp, collapseFraction)
+                val periodSpacerBelow = lerpDp(12.dp, 8.dp, collapseFraction)
+
+                // Gold / Silver Segmented Toggle (Pinned, compact on scroll)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp)
-                        .height(48.dp)
-                        .clip(RoundedCornerShape(10.dp))
+                        .height(toggleHeight)
+                        .clip(RoundedCornerShape(toggleCornerRadius))
                         .background(DarkSurface)
                         .border(
                             width = 1.dp,
                             color = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.08f),
-                            shape = RoundedCornerShape(10.dp)
+                            shape = RoundedCornerShape(toggleCornerRadius)
                         )
-                        .padding(3.dp)
+                        .padding(togglePadding)
                 ) {
                     Box(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(RoundedCornerShape(toggleInnerCornerRadius))
                             .background(if (isGoldSelected) GoldPrimary else Color.Transparent)
                             .clickable { isGoldSelected = true },
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = strings.metalGold,
-                            style = MaterialTheme.typography.titleSmall,
+                            style = MaterialTheme.typography.titleSmall.copy(fontSize = toggleTextSize),
                             color = if (isGoldSelected) DarkBackground else TextSecondary,
                             fontWeight = if (isGoldSelected) FontWeight.Bold else FontWeight.Medium
                         )
@@ -266,85 +373,99 @@ fun ChartsHistoryScreen(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(RoundedCornerShape(toggleInnerCornerRadius))
                             .background(if (!isGoldSelected) SilverPrimary else Color.Transparent)
                             .clickable { isGoldSelected = false },
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = strings.metalSilver,
-                            style = MaterialTheme.typography.titleSmall,
+                            style = MaterialTheme.typography.titleSmall.copy(fontSize = toggleTextSize),
                             color = if (!isGoldSelected) DarkBackground else TextSecondary,
                             fontWeight = if (!isGoldSelected) FontWeight.Bold else FontWeight.Medium
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                if (collapseFraction < 1f) {
+                    Spacer(modifier = Modifier.height(toggleSpacerBelow))
 
-                // Range Selectors (7D, 30D, 1Y) (Pinned)
-                val rangeOptions = listOf(
-                    Triple("7D", strings.range7D, Period.D7),
-                    Triple("30D", strings.range30D, Period.D30),
-                    Triple("1Y", strings.range1Y, Period.Y1)
-                )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    rangeOptions.forEach { (rangeKey, rangeLabel, period) ->
-                        val isRangeSelected = selectedRange == rangeKey
-                        val activeColor = if (isGoldSelected) GoldPrimary else SilverPrimary
-                        val isLocked = rangeKey == "1Y" && !isPremium
-
-                        Card(
+                    // Range Selectors (7D, 30D, 1Y) (Collapses and disappears on scroll)
+                    val rangeOptions = listOf(
+                        Triple("7D", strings.range7D, Period.D7),
+                        Triple("30D", strings.range30D, Period.D30),
+                        Triple("1Y", strings.range1Y, Period.Y1)
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(periodHeight)
+                            .clipToBounds()
+                            .graphicsLayer {
+                                alpha = (1f - collapseFraction * 1.4f).coerceIn(0f, 1f)
+                                translationY = -collapseFraction * 20f
+                            }
+                    ) {
+                        Row(
                             modifier = Modifier
-                                .weight(1f)
-                                .height(40.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .clickable { viewModel.setPeriod(period) }
-                                .border(
-                                    width = if (isRangeSelected) 1.dp else 0.dp,
-                                    color = if (isRangeSelected) activeColor else Color.Transparent,
-                                    shape = RoundedCornerShape(10.dp)
-                                ),
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (isRangeSelected) activeColor.copy(alpha = 0.15f) else DarkSurface
-                            )
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Row(
-                                modifier = Modifier.fillMaxSize(),
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = rangeLabel,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = if (isRangeSelected) activeColor else TextSecondary,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                if (isLocked) {
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Icon(
-                                        imageVector = Icons.Default.Lock,
-                                        contentDescription = strings.premiumFeature,
-                                        tint = GoldPrimary,
-                                        modifier = Modifier.size(12.dp)
+                            rangeOptions.forEach { (rangeKey, rangeLabel, period) ->
+                                val isRangeSelected = selectedRange == rangeKey
+                                val activeColor = if (isGoldSelected) GoldPrimary else SilverPrimary
+                                val isLocked = rangeKey == "1Y" && !isPremium
+
+                                Card(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(40.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .clickable { viewModel.setPeriod(period) }
+                                        .border(
+                                            width = if (isRangeSelected) 1.dp else 0.dp,
+                                            color = if (isRangeSelected) activeColor else Color.Transparent,
+                                            shape = RoundedCornerShape(10.dp)
+                                        ),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (isRangeSelected) activeColor.copy(alpha = 0.15f) else DarkSurface
                                     )
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxSize(),
+                                        horizontalArrangement = Arrangement.Center,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = rangeLabel,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = if (isRangeSelected) activeColor else TextSecondary,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        if (isLocked) {
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Icon(
+                                                imageVector = Icons.Default.Lock,
+                                                contentDescription = strings.premiumFeature,
+                                                tint = GoldPrimary,
+                                                modifier = Modifier.size(12.dp)
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(periodSpacerBelow))
 
-                // 1 dp bottom divider that appears only once the list is scrolled
+                // 1 dp bottom divider that appears only once the list is scrolled or header collapsed
                 val dividerColor = if (isSystemDarkThemeGlobal) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.08f)
+                val showDivider = collapseFraction > 0.05f || isScrolled
                 val animatedDividerColor by animateColorAsState(
-                    targetValue = if (isScrolled) dividerColor else Color.Transparent,
+                    targetValue = if (showDivider) dividerColor else Color.Transparent,
                     animationSpec = tween(durationMillis = 200),
                     label = "headerDividerColor"
                 )
@@ -355,15 +476,16 @@ fun ChartsHistoryScreen(
             }
         },
         containerColor = DarkBackground,
-        modifier = modifier
+        contentWindowInsets = WindowInsets.statusBars,
+        modifier = modifier.nestedScroll(nestedScrollConnection)
     ) { innerPadding ->
         LazyColumn(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
+                .padding(top = innerPadding.calculateTopPadding())
                 .padding(horizontal = 16.dp),
-            contentPadding = PaddingValues(top = 16.dp, bottom = 36.dp),
+            contentPadding = PaddingValues(top = 16.dp, bottom = bottomBarPadding + 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             if (chartPoints.isEmpty()) {
@@ -509,7 +631,7 @@ fun ChartsHistoryScreen(
                         SimpleDateFormat("dd MMM", Locale.getDefault())
                     }
                     val changeHint = if (firstPoint != null) {
-                        "From ${startDateFormat.format(Date(firstPoint.timestamp))} to today"
+                        stringResource(R.string.from_date_to_today, startDateFormat.format(Date(firstPoint.timestamp)))
                     } else ""
 
                     Card(
@@ -614,11 +736,11 @@ fun ChartsHistoryScreen(
                                 val unsignedPercent = String.format(Locale.US, "%.2f", kotlin.math.abs(periodPercent))
 
                                 val takeawaySentence = if (isPeriodUp) {
-                                    "$metalName is up $unsignedPercent% ${uiState.takeawaySpan} ($arrow $unsignedAmount)"
+                                    stringResource(R.string.trend_summary_up, metalName, unsignedPercent, uiState.takeawaySpan, arrow, unsignedAmount)
                                 } else if (isPeriodDown) {
-                                    "$metalName is down $unsignedPercent% ${uiState.takeawaySpan} ($arrow $unsignedAmount)"
+                                    stringResource(R.string.trend_summary_down, metalName, unsignedPercent, uiState.takeawaySpan, arrow, unsignedAmount)
                                 } else {
-                                    "$metalName price remained steady ${uiState.takeawaySpan}"
+                                    stringResource(R.string.trend_summary_steady, metalName, uiState.takeawaySpan)
                                 }
 
                                 Spacer(modifier = Modifier.height(2.dp))
@@ -662,9 +784,9 @@ fun ChartsHistoryScreen(
                                 high = maxPrice,
                                 current = currentRate ?: chartPoints.lastOrNull()?.price ?: 0.0,
                                 periodLabel = when (uiState.selectedPeriod) {
-                                    Period.D7 -> "7-day"
-                                    Period.D30 -> "30-day"
-                                    Period.Y1 -> "1-year"
+                                    Period.D7 -> stringResource(R.string.period_7_day)
+                                    Period.D30 -> stringResource(R.string.period_30_day)
+                                    Period.Y1 -> stringResource(R.string.period_1_year)
                                 },
                                 formatter = { price -> PriceConverter.formatAmount(price, selectedCurrency) }
                             )

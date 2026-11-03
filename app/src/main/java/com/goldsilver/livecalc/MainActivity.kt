@@ -1,7 +1,7 @@
 package com.goldsilver.livecalc
 
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.animation.doOnEnd
@@ -31,55 +31,62 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
     private val viewModel: GoldSilverViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        enableEdgeToEdge(
-            statusBarStyle = androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
-            navigationBarStyle = androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
-        )
+        val sharedPrefs = getSharedPreferences("gold_silver_prefs", android.content.Context.MODE_PRIVATE)
+        val savedTheme = sharedPrefs.getString("background_theme", "Night") ?: "Night"
+        selectedThemeGlobal = savedTheme
+        isSystemDarkThemeGlobal = (savedTheme == "Night")
+        com.goldsilver.livecalc.util.ThemeTransition.applyThemeToWindow(this, savedTheme)
 
-        // Ensure the splash screen stays visible for at least 1.5 seconds
-        var isMinimumTimePassed = false
-        lifecycleScope.launch {
-            delay(1500)
-            isMinimumTimePassed = true
+        val isColdStart = (savedInstanceState == null)
+
+        var isMinimumTimePassed = !isColdStart
+        if (isColdStart) {
+            // Ensure the splash screen stays visible for at least 1.5 seconds on initial cold launch
+            lifecycleScope.launch {
+                delay(1500)
+                isMinimumTimePassed = true
+            }
         }
         
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
             val splashScreen = installSplashScreen()
-            // Do not dismiss until both the minimum time has passed AND the required data is loaded
-            splashScreen.setKeepOnScreenCondition { 
-                !isMinimumTimePassed || !viewModel.isInitialLoadComplete.value 
-            }
-            
-            // Override the default Android zoom-out with a smooth, cinematic crossfade
-            splashScreen.setOnExitAnimationListener { splashScreenView ->
-                val fadeOut = android.animation.ObjectAnimator.ofFloat(
-                    splashScreenView.view,
-                    android.view.View.ALPHA,
-                    1f,
-                    0f
-                )
-                fadeOut.duration = 600L // Smooth 600ms fade
-                fadeOut.doOnEnd { splashScreenView.remove() }
-                fadeOut.start()
+            if (isColdStart) {
+                // Do not dismiss until both the minimum time has passed AND the required data is loaded
+                splashScreen.setKeepOnScreenCondition { 
+                    !isMinimumTimePassed || !viewModel.isInitialLoadComplete.value 
+                }
+                
+                // Override the default Android zoom-out with a smooth, cinematic crossfade
+                splashScreen.setOnExitAnimationListener { splashScreenView ->
+                    val fadeOut = android.animation.ObjectAnimator.ofFloat(
+                        splashScreenView.view,
+                        android.view.View.ALPHA,
+                        1f,
+                        0f
+                    )
+                    fadeOut.duration = 600L // Smooth 600ms fade
+                    fadeOut.doOnEnd { splashScreenView.remove() }
+                    fadeOut.start()
+                }
+            } else {
+                // On activity recreation (e.g. language change), immediately draw without holding splash
+                splashScreen.setKeepOnScreenCondition { false }
             }
         }
         
-        requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
         setTheme(R.style.Theme_GoldSilverLiveCalc)
         super.onCreate(savedInstanceState)
-        actionBar?.hide()
-        
+        supportActionBar?.hide()
+
         WindowCompat.setDecorFitsSystemWindows(window, false)
-        val insetsController = WindowCompat.getInsetsController(window, window.decorView)
-        insetsController.isAppearanceLightStatusBars = false
-        insetsController.isAppearanceLightNavigationBars = false
+        window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         
-        // On Android 11 and below, manually delay the first frame draw to hold the legacy splash screen
-        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S) {
+        // On Android 11 and below, manually delay the first frame draw to hold the legacy splash screen only on cold start
+        if (isColdStart && android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S) {
             val content = findViewById<android.view.View>(android.R.id.content)
             content.viewTreeObserver.addOnPreDrawListener(
                 object : android.view.ViewTreeObserver.OnPreDrawListener {
@@ -179,17 +186,39 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 ) { innerPadding ->
+                    val safeNavigateBack: () -> Unit = remember(navController) {
+                        var lastClickTime = 0L
+                        {
+                            val now = android.os.SystemClock.elapsedRealtime()
+                            if (now - lastClickTime > 500L) {
+                                lastClickTime = now
+                                if (!navController.popBackStack()) {
+                                    navController.navigate("dashboard") {
+                                        popUpTo("dashboard") {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    val bottomBarPadding = innerPadding.calculateBottomPadding()
+
                     NavHost(
                         navController = navController,
                         startDestination = "dashboard",
-                        modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding())
+                        modifier = Modifier.fillMaxSize()
                     ) {
                         composable("dashboard") {
                             HomeDashboardScreen(
                                 viewModel = viewModel,
                                 onNavigate = { route ->
                                     navController.navigate(route)
-                                }
+                                },
+                                bottomBarPadding = bottomBarPadding
                             )
                         }
                         composable(
@@ -203,7 +232,7 @@ class MainActivity : ComponentActivity() {
                             GoldCalculatorScreen(
                                 viewModel = viewModel,
                                 initialPurity = purity,
-                                onBack = { navController.popBackStack() }
+                                onBack = safeNavigateBack
                             )
                         }
                         composable(
@@ -217,19 +246,20 @@ class MainActivity : ComponentActivity() {
                             SilverCalculatorScreen(
                                 viewModel = viewModel,
                                 initialPurity = purity,
-                                onBack = { navController.popBackStack() }
+                                onBack = safeNavigateBack
                             )
                         }
                         composable("charts") {
                             ChartsHistoryScreen(
                                 viewModel = viewModel,
-                                onBack = { navController.popBackStack() }
+                                onBack = safeNavigateBack,
+                                bottomBarPadding = bottomBarPadding
                             )
                         }
                         composable("alerts") {
                             PriceAlertsScreen(
                                 viewModel = viewModel,
-                                onBack = { navController.popBackStack() }
+                                onBack = safeNavigateBack
                             )
                         }
                         composable("hallmark") {
@@ -237,13 +267,16 @@ class MainActivity : ComponentActivity() {
                                 onNavigateToCalculator = { isGold, purity ->
                                     val route = if (isGold) "gold_calc?purity=$purity" else "silver_calc?purity=$purity"
                                     navController.navigate(route)
-                                }
+                                },
+                                onBack = safeNavigateBack,
+                                bottomBarPadding = bottomBarPadding
                             )
                         }
                         composable("settings") {
                             SettingsScreen(
                                 viewModel = viewModel,
-                                onBack = { navController.popBackStack() }
+                                onBack = safeNavigateBack,
+                                bottomBarPadding = bottomBarPadding
                             )
                         }
                     }

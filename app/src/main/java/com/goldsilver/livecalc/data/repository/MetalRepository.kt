@@ -13,6 +13,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 import org.json.JSONObject
+import com.goldsilver.livecalc.R
 
 class MetalRepository(
     private val context: Context,
@@ -127,7 +128,7 @@ class MetalRepository(
 
         for (alert in activeAlerts) {
             val currentPrice = if (alert.metal == "GOLD") rateInCurrentCurrency.goldPrice24k else rateInCurrentCurrency.silverPrice
-            val metalName = if (alert.metal == "GOLD") "Gold (24K)" else "Silver"
+            val metalName = if (alert.metal == "GOLD") "${context.getString(R.string.metal_gold)} (24K)" else context.getString(R.string.metal_silver)
             
             var isConditionMet = false
             if (alert.condition == "ABOVE" && currentPrice >= alert.targetPrice) {
@@ -152,11 +153,15 @@ class MetalRepository(
                     if (isNotificationsEnabled) {
                         val formattedPrice = com.goldsilver.livecalc.util.CurrencyFormatter.formatCurrency(currentPrice, currentAppCurrency)
                         val formattedTarget = com.goldsilver.livecalc.util.CurrencyFormatter.formatCurrency(alert.targetPrice, currentAppCurrency)
-                        val title = if (alert.metal == "GOLD") "🔔 Gold Price Alert" else "🔔 Silver Price Alert"
-                        val message = if (alert.condition == "ABOVE") {
-                            "$metalName has reached $formattedPrice/g, crossing your target of $formattedTarget/g."
+                        val title = if (alert.metal == "GOLD") {
+                            context.getString(R.string.notification_gold_alert_title)
                         } else {
-                            "$metalName has fallen below your target of $formattedTarget/g. Current price: $formattedPrice/g."
+                            context.getString(R.string.notification_silver_alert_title)
+                        }
+                        val message = if (alert.condition == "ABOVE") {
+                            context.getString(R.string.notification_alert_above_msg, metalName, formattedPrice, formattedTarget)
+                        } else {
+                            context.getString(R.string.notification_alert_below_msg, metalName, formattedTarget, formattedPrice)
                         }
                         notificationHelper.showPriceAlertNotification(title, message)
                     }

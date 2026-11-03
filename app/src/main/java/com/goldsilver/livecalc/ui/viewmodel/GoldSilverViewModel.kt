@@ -53,9 +53,9 @@ class GoldSilverViewModel(application: Application) : AndroidViewModel(applicati
             Period.Y1 -> app.getString(R.string.trend_change_1y)
         }
         val takeaway = when (period) {
-            Period.D7 -> "this week"
-            Period.D30 -> "this month"
-            Period.Y1 -> "this year"
+            Period.D7 -> app.getString(R.string.this_week)
+            Period.D30 -> app.getString(R.string.this_month)
+            Period.Y1 -> app.getString(R.string.this_year)
         }
         UiState(
             selectedPeriod = period,
@@ -127,7 +127,17 @@ class GoldSilverViewModel(application: Application) : AndroidViewModel(applicati
         clean !in listOf("INR", "USD")
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
-    val language = MutableStateFlow(sharedPrefs.getString("language", "English") ?: "English")
+    val language = MutableStateFlow(
+        run {
+            val appLocales = androidx.appcompat.app.AppCompatDelegate.getApplicationLocales()
+            val tag = if (!appLocales.isEmpty) {
+                appLocales.get(0)?.language ?: "en"
+            } else {
+                java.util.Locale.getDefault().language ?: "en"
+            }
+            com.goldsilver.livecalc.util.getLanguageFromTag(tag)
+        }
+    )
     val isNotificationsEnabled = MutableStateFlow(sharedPrefs.getBoolean("notifications_enabled", true))
     val isPremium = MutableStateFlow(true)
     val isDarkMode = MutableStateFlow(sharedPrefs.getBoolean("dark_mode", true))
@@ -305,7 +315,7 @@ class GoldSilverViewModel(application: Application) : AndroidViewModel(applicati
             if (force) {
                 android.widget.Toast.makeText(
                     app,
-                    "No internet connection. Please try again later.",
+                    app.getString(R.string.no_internet_try_again),
                     android.widget.Toast.LENGTH_SHORT
                 ).show()
             }
@@ -320,7 +330,7 @@ class GoldSilverViewModel(application: Application) : AndroidViewModel(applicati
             if (force) {
                 _isRefreshing.value = false
                 if (result.isFailure) {
-                    val errorMsg = result.exceptionOrNull()?.localizedMessage ?: "Failed to refresh rates."
+                    val errorMsg = result.exceptionOrNull()?.localizedMessage ?: app.getString(R.string.failed_refresh_rates)
                     android.widget.Toast.makeText(
                         app,
                         errorMsg,
@@ -343,8 +353,17 @@ class GoldSilverViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun setLanguage(newLanguage: String) {
+        val tag = com.goldsilver.livecalc.util.getLanguageTag(newLanguage)
+        val currentLocales = androidx.appcompat.app.AppCompatDelegate.getApplicationLocales()
+        val currentTag = if (!currentLocales.isEmpty) currentLocales.get(0)?.language else null
+
+        // Prevent redundant calls if locale is already active
+        if (currentTag == tag) return
+
         language.value = newLanguage
-        sharedPrefs.edit().putString("language", newLanguage).apply()
+        androidx.appcompat.app.AppCompatDelegate.setApplicationLocales(
+            androidx.core.os.LocaleListCompat.forLanguageTags(tag)
+        )
     }
 
     fun setNotificationsEnabled(enabled: Boolean) {
@@ -367,13 +386,17 @@ class GoldSilverViewModel(application: Application) : AndroidViewModel(applicati
         sharedPrefs.edit().putString("background_theme", newTheme).apply()
     }
 
-    fun setBackgroundTheme(newTheme: String) {
+    fun setBackgroundTheme(newTheme: String, activity: android.app.Activity? = null) {
         backgroundTheme.value = newTheme
         selectedThemeGlobal = newTheme
         isSystemDarkThemeGlobal = (newTheme == "Night")
         isDarkMode.value = (newTheme == "Night")
         sharedPrefs.edit().putString("background_theme", newTheme).apply()
         sharedPrefs.edit().putBoolean("dark_mode", newTheme == "Night").apply()
+
+        if (activity != null) {
+            com.goldsilver.livecalc.util.ThemeTransition.applyThemeToWindow(activity, newTheme)
+        }
     }
 
     fun setPremium(premium: Boolean) {
@@ -473,7 +496,7 @@ class GoldSilverViewModel(application: Application) : AndroidViewModel(applicati
                     if (!silent && context != null) {
                         android.widget.Toast.makeText(
                             context,
-                            "You are on the latest version (v$currentName • Build $currentCode / Server $latestCode)",
+                            context.getString(R.string.latest_version_toast, currentName, currentCode, latestCode),
                             android.widget.Toast.LENGTH_LONG
                         ).show()
                     }
@@ -483,7 +506,7 @@ class GoldSilverViewModel(application: Application) : AndroidViewModel(applicati
                 if (!silent && context != null) {
                     android.widget.Toast.makeText(
                         context,
-                        "Could not check for updates: ${e.localizedMessage ?: "Unknown error"}",
+                        context.getString(R.string.update_check_error_toast, e.localizedMessage ?: context.getString(R.string.update_check_unknown_error)),
                         android.widget.Toast.LENGTH_LONG
                     ).show()
                 }

@@ -2,14 +2,42 @@
 <resources>
     <string name="app_name">Gold Silver Live Calc</string>
 
-    <!-- Home Page Labels & Titles -->
+    <!-- ══ Common / Navigation ══ -->
+    <string name="btn_refresh">Refresh</string>
+    <string name="btn_cancel">Cancel</string>
+    <string name="btn_save">Save</string>
+    <string name="btn_delete">Delete</string>
+    <string name="btn_done">Done</string>
+    <string name="btn_back">Back</string>
+    <string name="btn_retry">Retry</string>
+    <string name="btn_close">Close</string>
+    <string name="btn_ok">OK</string>
+    <string name="btn_share">Share</string>
+    <string name="common_error">Error</string>
+    <string name="common_loading">Loading…</string>
+    <string name="no_internet">No internet connection</string>
+    <string name="no_internet_try_again">No internet connection. Please try again later.</string>
+    <string name="failed_refresh_rates">Failed to refresh rates.</string>
+
+    <!-- ══ Bottom Navigation Tabs ══ -->
+    <string name="tab_rates">Rates</string>
+    <string name="tab_trends">Trends</string>
+    <string name="tab_calculator">Calculator</string>
+    <string name="tab_hallmark">Hallmark</string>
+    <string name="tab_alerts">Alerts</string>
+    <string name="tab_settings">Settings</string>
+
+    <!-- ══ Home / Dashboard ══ -->
+    <string name="live_metal_rates">Live Metal Rates</string>
+    <string name="last_updated">Last updated</string>
+    <string name="spot">Spot</string>
     <string name="gold_xau">Gold (XAU)</string>
     <string name="silver_xag">Silver (XAG)</string>
-    <string name="section_purity">PURITY</string>
-    <string name="section_weight">WEIGHT</string>
     <string name="show_breakdown">Show breakdown</string>
     <string name="show_less">Show less</string>
     <string name="vs_yesterday">vs yesterday</string>
+    <string name="section_purity">PURITY</string>
+    <string name="section_weight">WEIGHT</string>
     <string name="market_snapshot">Market Snapshot</string>
 
     <!-- Weights -->
@@ -35,12 +63,33 @@
     <string name="subtitle_verify_purity">Verify purity</string>
     <string name="subtitle_price_alerts">Price alerts</string>
 
-    <!-- Historical Trends -->
+    <!-- ══ Historical Trends ══ -->
+    <string name="historical_trends">Historical Trends</string>
+    <string name="range_7d">7D</string>
+    <string name="range_30d">30D</string>
+    <string name="range_1y">1Y</string>
     <string name="trend_change_7d">7 Days Change</string>
     <string name="trend_change_30d">30 Days Change</string>
     <string name="trend_change_1y">1 Year Change</string>
-    <string name="range">Range (High − Low)</string>
-    <string name="today">Today</string>
+    <string name="this_week">this week</string>
+    <string name="this_month">this month</string>
+    <string name="this_year">this year</string>
+    <string name="period_7_day">7-day</string>
+    <string name="period_30_day">30-day</string>
+    <string name="period_1_year">1-year</string>
+    <string name="high">HIGH</string>
+    <string name="low">LOW</string>
+    <string name="current_rate">CURRENT RATE</string>
+    <string name="market_summary">Market Summary</string>
+    <string name="todays_change">Today\'s Change</string>
+    <string name="highest_rate">Highest Rate</string>
+    <string name="lowest_rate">Lowest Rate</string>
+    <string name="average_price">Average Price</string>
+    <string name="initial_record">Initial Record</string>
+    <string name="no_historical_data">No historical data available</string>
+    <string name="premium_feature">1-Year Trends is a Premium Feature</string>
+    <string name="unlock_trends_desc">Unlock long-term investment graphs and deeper market analytics.</string>
+    <string name="upgrade_to_premium">Upgrade to Premium</string>
     <string name="daily_rates">Daily Rates</string>
     <string name="weekly_rates">Weekly Rates</string>
     <string name="show_more">Show more</string>
@@ -48,8 +97,14 @@
     <string name="date_header">Date</string>
     <string name="close_rate_header">Close Rate</string>
     <string name="change_header">Change</string>
+    <string name="today">Today</string>
+    <!-- Trend summary sentences -->
+    <string name="trend_summary_up">%1$s is up %2$s%% %3$s (%4$s %5$s)</string>
+    <string name="trend_summary_down">%1$s is down %2$s%% %3$s (%4$s %5$s)</string>
+    <string name="trend_summary_steady">%1$s price remained steady %2$s</string>
 
-    <!-- Price Range Indicator -->
+    <!-- Range bar -->
+    <string name="range">Range (High − Low)</string>
     <string name="range_low_label">Low %1$s</string>
     <string name="range_high_label">High %1$s</string>
     <string name="range_today_label">Today %1$s</string>
@@ -60,7 +115,37 @@
     <string name="range_near_high">Nearer the high</string>
     <string name="range_content_desc">Current price is %1$d%% of the way between the %2$s low %3$s and high %4$s</string>
 
-    <!-- Hallmark Verification -->
+    <!-- ══ Calculators (Gold &amp; Silver) ══ -->
+    <string name="gold_calculator">Gold Calculator</string>
+    <string name="silver_calculator">Silver Calculator</string>
+    <string name="weight_label">Weight</string>
+    <string name="enter_weight">Enter weight</string>
+    <string name="unit_label">Unit</string>
+    <string name="unit_gram">Gram (g) ⭐</string>
+    <string name="unit_kilogram">Kilogram (kg)</string>
+    <string name="unit_tola">Tola (11.6638 g)</string>
+    <string name="unit_ounce">Ounce (oz)</string>
+    <string name="unit_milligram">Milligram (mg)</string>
+    <string name="rate_per_unit">Rate (%1$s/Gram)</string>
+    <string name="select_purity">Select Purity</string>
+    <string name="making_charges">Making Charges</string>
+    <string name="charge_type">Charge Type</string>
+    <string name="percentage">Percentage (%)</string>
+    <string name="fixed_amount">Fixed (Per Gram)</string>
+    <string name="gst_tax">GST / Tax</string>
+    <string name="gst_percent_label">GST (%)</string>
+    <string name="gst_info_message">GST of 3%% is calculated on the total of Gold Value + Making Charges.</string>
+    <string name="gst_info_message_silver">GST of 3%% is calculated on the total of Silver Value + Making Charges.</string>
+    <string name="price_breakdown">Price Breakdown</string>
+    <string name="base_metal_price">Base Metal Price</string>
+    <string name="total_making_charges">Total Making Charges</string>
+    <string name="gst_amount">GST Amount</string>
+    <string name="total_payable">Total Payable Amount</string>
+    <string name="btn_calculate">Calculate</string>
+    <string name="btn_reset">Reset</string>
+    <string name="error_enter_weight">Please enter a valid weight</string>
+
+    <!-- ══ Hallmark Verification ══ -->
     <string name="hallmark_verification_title">Hallmark Verification</string>
     <string name="hallmark_intro_title">Verify Hallmark via BIS CARE</string>
     <string name="hallmark_intro_subtitle">Official app by Bureau of Indian Standards</string>
@@ -75,7 +160,7 @@
     <string name="snackbar_bis_care_error">Couldn\'t open BIS CARE — install it from the Play Store</string>
     <string name="action_open">Open</string>
 
-    <!-- How to Read a Hallmark Card -->
+    <!-- How to Read a Hallmark -->
     <string name="hallmark_how_to_read_title">How to read a hallmark</string>
     <string name="hallmark_mark_bis_logo">BIS logo</string>
     <string name="hallmark_mark_bis_logo_desc">The triangular BIS standard mark.</string>
@@ -104,4 +189,108 @@
     <string name="sheet_step_2">Go to \"Verify HUID\" and enter the 6-character code.</string>
     <string name="sheet_step_3">Match the jeweller name, purity and AHC shown with your bill and the piece.</string>
     <string name="sheet_disclaimer">This app does not verify HUIDs itself. Verification is done by the official BIS platform.</string>
+
+    <!-- ══ Price Alerts ══ -->
+    <string name="price_alerts_title">Price Alerts</string>
+    <string name="price_alerts_subtitle">Set alerts and get notified when target prices are reached</string>
+    <string name="create_price_alert">Create Price Alert</string>
+    <string name="select_metal">Select Metal</string>
+    <string name="metal_gold">Gold</string>
+    <string name="metal_silver">Silver</string>
+    <string name="alert_condition">Condition</string>
+    <string name="rises_above">Rises Above (≥)</string>
+    <string name="falls_below">Falls Below (≤)</string>
+    <string name="target_price">Target Price</string>
+    <string name="target_price_format">Target Price (%1$s/Gram)</string>
+    <string name="enter_target_price">Enter target price per gram</string>
+    <string name="btn_set_alert">Set Alert</string>
+    <string name="active_alerts_count">ACTIVE ALERTS (%1$d)</string>
+    <string name="no_active_alerts">No active alerts. We\'ll monitor prices in the background and notify you when they hit your targets.</string>
+    <string name="alert_duplicate_toast">Target price already set</string>
+    <string name="alert_duplicate_title">Target Price Already Set</string>
+    <string name="alert_duplicate_message">A price alert for %1$s (%2$s) at %3$s/g is already set and active.</string>
+    <string name="alert_success_toast">Target price %1$s set successfully</string>
+    <string name="alert_success_title">Target Price Set Successfully</string>
+    <string name="alert_success_message">Target price %1$s/g (%2$s) set successfully for %3$s.</string>
+    <string name="alert_invalid_price">Please enter a valid target price</string>
+    <string name="limit_dialog_title">Multiple Alerts Limit</string>
+    <string name="limit_dialog_message">Free users can set only 1 active alert at a time. Upgrade to Premium for unlimited target alerts in the background!</string>
+    <string name="unlock_premium">Unlock Premium</string>
+    <string name="alert_created_at">Created: %1$s</string>
+    <string name="alert_created_and_hit">Created: %1$s\nLast Hit: %2$s</string>
+    <string name="alert_content_desc">Alert</string>
+    <string name="delete_alert_cd">Delete Alert</string>
+
+    <!-- ══ Settings ══ -->
+    <string name="settings_title">Settings</string>
+    <string name="preferences_and_alerts">PREFERENCES &amp; ALERTS</string>
+    <string name="price_alert_notifications">Gold &amp; Silver Price Alerts</string>
+    <string name="alerts_enabled_desc">Alerts enabled for target rates</string>
+    <string name="alerts_disabled_desc">Alerts disabled</string>
+    <string name="alerts_enabled_toast">Alerts enabled for target rates</string>
+    <string name="display_currency">Display Currency</string>
+    <string name="select_currency_cd">Select Currency</string>
+    <string name="app_language">App Language</string>
+    <string name="select_language_cd">Select Language</string>
+    <string name="background_theme">Background Theme</string>
+    <string name="select_theme_cd">Select Theme</string>
+    <!-- Theme options -->
+    <string name="theme_ivory">Ivory</string>
+    <string name="theme_cream">Cream</string>
+    <string name="theme_mist">Mist</string>
+    <string name="theme_sage">Sage</string>
+    <string name="theme_lavender">Lavender</string>
+    <string name="theme_peach">Peach</string>
+    <string name="theme_sky_blue">Sky Blue</string>
+    <string name="theme_sand">Sand</string>
+    <string name="theme_night">Night</string>
+    <!-- About & Support -->
+    <string name="about_and_support">ABOUT &amp; SUPPORT</string>
+    <string name="rate_app">Rate Us on Play Store</string>
+    <string name="rate_us_cd">Rate Us</string>
+    <string name="share_app">Share App with Friends</string>
+    <string name="share_app_cd">Share us</string>
+    <string name="share_app_subject">Gold Silver Live Calc</string>
+    <string name="share_app_text">Check out Gold Silver Live Calc for real-time rates and trend charts! Download here: https://play.google.com/store/apps/details?id=%1$s</string>
+    <string name="share_via">Share via</string>
+    <string name="privacy_policy">Privacy Policy</string>
+    <string name="terms_of_service">Terms of Service</string>
+    <string name="app_version">App Version</string>
+    <string name="developer">Developer</string>
+    <string name="check_for_updates">Check for Updates</string>
+    <string name="check_for_updates_cd">Check for Updates</string>
+    <string name="notifications_cd">Notifications</string>
+    <string name="latest_version_toast">You are on the latest version (v%1$s • Build %2$d / Server %3$d)</string>
+    <string name="update_check_error_toast">Could not check for updates: %1$s</string>
+    <string name="update_check_unknown_error">Unknown error</string>
+
+    <!-- ══ App Update Dialog ══ -->
+    <string name="update_available">Update Available</string>
+    <string name="update_now">Update Now</string>
+    <string name="later">Later</string>
+    <string name="new_version_ready">A new version is ready with the latest rates and improvements.</string>
+    <string name="update_redirect_error">Please open Google Play Store to update Gold Silver Live Calc.</string>
+
+    <!-- ══ Notification Channel &amp; Messages ══ -->
+    <string name="price_alerts_channel_name">Price Alerts</string>
+    <string name="price_alerts_channel_desc">Triggers alerts when Gold or Silver crosses your target price</string>
+    <string name="notification_gold_alert_title">🔔 Gold Price Alert</string>
+    <string name="notification_silver_alert_title">🔔 Silver Price Alert</string>
+    <string name="notification_alert_above_msg">%1$s has reached %2$s/g, crossing your target of %3$s/g.</string>
+    <string name="notification_alert_below_msg">%1$s has fallen below your target of %2$s/g. Current price: %3$s/g.</string>
+
+    <!-- Additional Screen Strings -->
+    <string name="purity_karat">Purity (Karat)</string>
+    <string name="purity_silver">Purity (Silver)</string>
+    <string name="purity_fine">999\n(Fine)</string>
+    <string name="purity_sterling">925\n(Sterling)</string>
+    <string name="purity_coin">900\n(Coin)</string>
+    <string name="live_rate_label">Live Rate (%1$s)</string>
+    <string name="custom_rate_label">Custom Rate (%1$s)</string>
+    <string name="reset_to_live">Reset to Live</string>
+    <string name="making_charge_percent">Making Charge (%)</string>
+    <string name="making_charge_amount">Making Charge (%1$s)</string>
+    <string name="from_date_to_today">From %1$s to today</string>
+    <string name="per_gram_unit">/ gram</string>
+    <string name="navigate_back">Navigate back</string>
 </resources>

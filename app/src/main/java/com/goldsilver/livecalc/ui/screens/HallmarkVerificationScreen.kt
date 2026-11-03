@@ -19,6 +19,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Close
@@ -40,6 +41,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -51,7 +53,8 @@ import com.goldsilver.livecalc.ui.viewmodel.GoldSilverViewModel
 import com.goldsilver.livecalc.ui.viewmodel.HallmarkViewModel
 import kotlinx.coroutines.launch
 
-private val HallmarkPrimary = Color(0xFF10B981) // Vibrant Emerald Green
+private val HallmarkPrimary: Color
+    get() = if (isSystemDarkThemeGlobal) Color(0xFF10B981) else Color(0xFF047857)
 
 /**
  * Main Hallmark Verification Screen composable.
@@ -61,7 +64,9 @@ private val HallmarkPrimary = Color(0xFF10B981) // Vibrant Emerald Green
 fun HallmarkScreen(
     viewModel: HallmarkViewModel = viewModel(),
     onNavigateToCalculator: (isGold: Boolean, purity: String) -> Unit = { _, _ -> },
-    modifier: Modifier = Modifier
+    onBack: () -> Unit = {},
+    modifier: Modifier = Modifier,
+    bottomBarPadding: Dp = 80.dp
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -128,18 +133,31 @@ fun HallmarkScreen(
                         fontWeight = FontWeight.Bold
                     )
                 },
+                navigationIcon = {
+                    IconButton(
+                        onClick = onBack,
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.navigate_back),
+                            tint = HallmarkPrimary
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBackground)
             )
         },
         containerColor = DarkBackground,
+        contentWindowInsets = WindowInsets.statusBars,
         modifier = modifier
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
+                .padding(top = innerPadding.calculateTopPadding())
                 .padding(horizontal = 16.dp),
-            contentPadding = PaddingValues(bottom = 32.dp),
+            contentPadding = PaddingValues(top = 8.dp, bottom = bottomBarPadding + 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item { Spacer(modifier = Modifier.height(2.dp)) }

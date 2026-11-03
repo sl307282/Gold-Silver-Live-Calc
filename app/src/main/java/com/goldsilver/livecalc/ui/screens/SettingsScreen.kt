@@ -22,6 +22,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.goldsilver.livecalc.ui.theme.*
@@ -29,15 +30,26 @@ import com.goldsilver.livecalc.ui.viewmodel.GoldSilverViewModel
 import com.goldsilver.livecalc.util.LocalAppStrings
 import com.goldsilver.livecalc.util.getSupportedLanguages
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.res.stringResource
+import com.goldsilver.livecalc.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     viewModel: GoldSilverViewModel,
     onBack: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    bottomBarPadding: Dp = 80.dp
 ) {
     val context = LocalContext.current
+    val activity = remember(context) {
+        var ctx = context
+        while (ctx is android.content.ContextWrapper) {
+            if (ctx is android.app.Activity) return@remember ctx
+            ctx = ctx.baseContext
+        }
+        null
+    }
     val strings = LocalAppStrings.current
     val currency by viewModel.currency.collectAsStateWithLifecycle()
     val language by viewModel.language.collectAsStateWithLifecycle()
@@ -87,21 +99,30 @@ fun SettingsScreen(
             TopAppBar(
                 title = { Text(strings.settingsTitle, color = GoldPrimary, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = strings.back, tint = GoldPrimary)
+                    IconButton(
+                        onClick = onBack,
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.navigate_back),
+                            tint = GoldPrimary
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBackground)
             )
         },
         containerColor = DarkBackground,
+        contentWindowInsets = WindowInsets.statusBars,
         modifier = modifier
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
+                .padding(top = innerPadding.calculateTopPadding())
                 .padding(horizontal = 16.dp),
+            contentPadding = PaddingValues(top = 8.dp, bottom = bottomBarPadding + 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // General Settings Card
@@ -200,7 +221,7 @@ fun SettingsScreen(
                                     Text(currency, color = GoldPrimary, fontWeight = FontWeight.Bold)
                                     Icon(
                                         imageVector = Icons.Default.ArrowDropDown,
-                                        contentDescription = "Select Currency",
+                                        contentDescription = stringResource(R.string.select_currency_cd),
                                         tint = GoldPrimary,
                                         modifier = Modifier.size(20.dp)
                                     )
@@ -248,7 +269,7 @@ fun SettingsScreen(
                                     Text(currentDisplayName, color = GoldPrimary, fontWeight = FontWeight.Bold)
                                     Icon(
                                         imageVector = Icons.Default.ArrowDropDown,
-                                        contentDescription = "Select Language",
+                                        contentDescription = stringResource(R.string.select_language_cd),
                                         tint = GoldPrimary,
                                         modifier = Modifier.size(20.dp)
                                     )
@@ -303,10 +324,22 @@ fun SettingsScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
-                                    Text(backgroundTheme, color = GoldPrimary, fontWeight = FontWeight.Bold)
+                                    val themeDisplayName = when (backgroundTheme) {
+                                        "Ivory" -> stringResource(R.string.theme_ivory)
+                                        "Cream" -> stringResource(R.string.theme_cream)
+                                        "Mist" -> stringResource(R.string.theme_mist)
+                                        "Sage" -> stringResource(R.string.theme_sage)
+                                        "Lavender" -> stringResource(R.string.theme_lavender)
+                                        "Peach" -> stringResource(R.string.theme_peach)
+                                        "Sky Blue" -> stringResource(R.string.theme_sky_blue)
+                                        "Sand" -> stringResource(R.string.theme_sand)
+                                        "Night" -> stringResource(R.string.theme_night)
+                                        else -> backgroundTheme
+                                    }
+                                    Text(themeDisplayName, color = GoldPrimary, fontWeight = FontWeight.Bold)
                                     Icon(
                                         imageVector = Icons.Default.ArrowDropDown,
-                                        contentDescription = "Select Theme",
+                                        contentDescription = stringResource(R.string.select_theme_cd),
                                         tint = GoldPrimary,
                                         modifier = Modifier.size(20.dp)
                                     )
@@ -315,12 +348,30 @@ fun SettingsScreen(
                                     expanded = themeExpanded,
                                     onDismissRequest = { themeExpanded = false }
                                 ) {
-                                    listOf("Ivory", "Cream", "Mist", "Sage", "Lavender", "Peach", "Sky Blue", "Sand", "Night").forEach { themeName ->
+                                    listOf(
+                                        "Ivory" to stringResource(R.string.theme_ivory),
+                                        "Cream" to stringResource(R.string.theme_cream),
+                                        "Mist" to stringResource(R.string.theme_mist),
+                                        "Sage" to stringResource(R.string.theme_sage),
+                                        "Lavender" to stringResource(R.string.theme_lavender),
+                                        "Peach" to stringResource(R.string.theme_peach),
+                                        "Sky Blue" to stringResource(R.string.theme_sky_blue),
+                                        "Sand" to stringResource(R.string.theme_sand),
+                                        "Night" to stringResource(R.string.theme_night)
+                                    ).forEach { (themeKey, themeLabel) ->
                                         DropdownMenuItem(
-                                            text = { Text(themeName) },
+                                            text = { Text(themeLabel) },
                                             onClick = {
-                                                viewModel.setBackgroundTheme(themeName)
                                                 themeExpanded = false
+                                                if (themeKey != backgroundTheme) {
+                                                    if (activity != null) {
+                                                        com.goldsilver.livecalc.util.ThemeTransition.crossfade(activity) {
+                                                            viewModel.setBackgroundTheme(themeKey, activity)
+                                                        }
+                                                    } else {
+                                                        viewModel.setBackgroundTheme(themeKey)
+                                                    }
+                                                }
                                             }
                                         )
                                     }
@@ -378,7 +429,7 @@ fun SettingsScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Star, contentDescription = "Rate Us", tint = GoldPrimary)
+                                Icon(Icons.Default.Star, contentDescription = stringResource(R.string.rate_us_cd), tint = GoldPrimary)
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Text(strings.rateApp, color = TextPrimary)
                             }
@@ -399,17 +450,17 @@ fun SettingsScreen(
                                 .clickable {
                                     val shareIntent = Intent(Intent.ACTION_SEND).apply {
                                         type = "text/plain"
-                                        putExtra(Intent.EXTRA_SUBJECT, "Gold & Silver Live Calculator")
-                                        putExtra(Intent.EXTRA_TEXT, "Check out Gold & Silver Live Calculator for real-time rates and trend charts! Download here: https://play.google.com/store/apps/details?id=${context.packageName}")
+                                        putExtra(Intent.EXTRA_SUBJECT, context.getString(R.string.share_app_subject))
+                                        putExtra(Intent.EXTRA_TEXT, context.getString(R.string.share_app_text, context.packageName))
                                     }
-                                    context.startActivity(Intent.createChooser(shareIntent, "Share via"))
+                                    context.startActivity(Intent.createChooser(shareIntent, context.getString(R.string.share_via)))
                                 }
                                 .padding(12.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Share, contentDescription = "Share us", tint = SilverPrimary)
+                                Icon(Icons.Default.Share, contentDescription = stringResource(R.string.share_app_cd), tint = SilverPrimary)
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Text(strings.shareApp, color = TextPrimary)
                             }
@@ -435,10 +486,10 @@ fun SettingsScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.SystemUpdate, contentDescription = "Check for Updates", tint = GoldPrimary)
+                                Icon(Icons.Default.SystemUpdate, contentDescription = stringResource(R.string.check_for_updates_cd), tint = GoldPrimary)
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
-                                    Text(strings.updateAvailable, color = TextPrimary)
+                                    Text(stringResource(R.string.check_for_updates), color = TextPrimary)
                                     Text("${strings.appVersion} ${com.goldsilver.livecalc.BuildConfig.VERSION_NAME}", color = TextMuted, fontSize = 12.sp)
                                 }
                             }

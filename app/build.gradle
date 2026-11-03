@@ -19,7 +19,7 @@ android {
         versionName "1.2.4"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-        resourceConfigurations += ["en", "hi"]
+        resourceConfigurations += ["en", "hi", "es", "ar", "fr", "pt", "in", "id"]
         vectorDrawables {
             useSupportLibrary true
         }
@@ -39,7 +39,7 @@ android {
 
     bundle {
         language {
-            enableSplit = true
+            enableSplit = false
         }
         density {
             enableSplit = true

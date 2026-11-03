@@ -40,6 +40,8 @@ import kotlinx.coroutines.delay
 import com.goldsilver.livecalc.ui.theme.*
 import com.goldsilver.livecalc.ui.viewmodel.GoldSilverViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.res.stringResource
+import com.goldsilver.livecalc.R
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 @Composable
@@ -128,7 +130,7 @@ fun SilverCalculatorScreen(
         AlertDialog(
             onDismissRequest = { showGstInfo = false },
             title = { Text(strings.gstTax, color = SilverPrimary, fontWeight = FontWeight.Bold) },
-            text = { Text("GST of 3% is calculated on the total of Silver Value + Making Charges.", color = TextPrimary) },
+            text = { Text(stringResource(R.string.gst_info_message_silver), color = TextPrimary) },
             confirmButton = {
                 TextButton(onClick = { showGstInfo = false }) {
                     Text(strings.done, color = SilverPrimary, fontWeight = FontWeight.Bold)
@@ -143,8 +145,15 @@ fun SilverCalculatorScreen(
             TopAppBar(
                 title = { Text(strings.silverCalculator, color = SilverPrimary, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = strings.back, tint = SilverPrimary)
+                    IconButton(
+                        onClick = onBack,
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.navigate_back),
+                            tint = SilverPrimary
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBackground)
@@ -175,7 +184,7 @@ fun SilverCalculatorScreen(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
                 ) {
                     Text(
-                        text = "Purity (Silver)",
+                        text = stringResource(R.string.purity_silver),
                         color = TextSecondary,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold
@@ -185,7 +194,11 @@ fun SilverCalculatorScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        listOf("999" to "999\n(Fine)", "925" to "925\n(Sterling)", "900" to "900\n(Coin)").forEach { (purity, label) ->
+                        listOf(
+                            "999" to stringResource(R.string.purity_fine),
+                            "925" to stringResource(R.string.purity_sterling),
+                            "900" to stringResource(R.string.purity_coin)
+                        ).forEach { (purity, label) ->
                             val isSelected = selectedPurity == purity
                             val bgColor by animateColorAsState(
                                 targetValue = if (isSelected) {
@@ -267,7 +280,7 @@ fun SilverCalculatorScreen(
                         OutlinedTextField(
                             value = customRateInput,
                             onValueChange = { customRateInput = com.goldsilver.livecalc.util.CurrencyFormatter.formatInput(it, currency) },
-                            label = { Text("Rate ($currency/Gram)") },
+                            label = { Text(stringResource(R.string.rate_per_unit, currency)) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedBorderColor = SilverPrimary, focusedLabelColor = SilverPrimary,
@@ -308,13 +321,17 @@ fun SilverCalculatorScreen(
                                         Math.abs(it - currentRatePerGram) > 0.01
                                     }
                                     Text(
-                                        text = if (isCustom) "Custom Rate ($selectedPurity)" else "Live Rate ($selectedPurity)",
+                                        text = if (isCustom) {
+                                            stringResource(R.string.custom_rate_label, selectedPurity)
+                                        } else {
+                                            stringResource(R.string.live_rate_label, selectedPurity)
+                                        },
                                         color = TextSecondary, fontSize = 12.sp
                                     )
                                 }
                                 if (com.goldsilver.livecalc.util.CurrencyFormatter.parseAmount(customRateInput).let { Math.abs(it - currentRatePerGram) > 0.01 }) {
                                     Text(
-                                        text = "Reset to Live",
+                                        text = stringResource(R.string.reset_to_live),
                                         color = SilverPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold,
                                         modifier = Modifier.clickable {
                                             isEditingRate = false; focusManager.clearFocus()
@@ -333,7 +350,7 @@ fun SilverCalculatorScreen(
                                         color = SilverPrimary, fontWeight = FontWeight.Bold, fontSize = 26.sp
                                     )
                                     Text(
-                                        text = "$currency / gram",
+                                        text = "$currency " + stringResource(R.string.per_gram_unit),
                                         color = TextSecondary, fontSize = 12.sp,
                                         modifier = Modifier.padding(bottom = 4.dp)
                                     )
@@ -366,8 +383,8 @@ fun SilverCalculatorScreen(
                                     weightInput = newValue 
                                 }
                             },
-                            label = { Text("Weight") },
-                            placeholder = { Text("Enter weight", color = TextSecondary.copy(alpha = 0.5f)) },
+                            label = { Text(stringResource(R.string.weight_label)) },
+                            placeholder = { Text(stringResource(R.string.enter_weight), color = TextSecondary.copy(alpha = 0.5f)) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedBorderColor = SilverPrimary, focusedLabelColor = SilverPrimary,
@@ -390,11 +407,19 @@ fun SilverCalculatorScreen(
                             singleLine = true
                         )
                         Box(modifier = Modifier.weight(1f).height(58.dp)) {
+                            val unitDisplay = when (selectedUnit) {
+                                "Gram" -> stringResource(R.string.unit_gram)
+                                "Kilogram" -> stringResource(R.string.unit_kilogram)
+                                "Tola" -> stringResource(R.string.unit_tola)
+                                "Ounce" -> stringResource(R.string.unit_ounce)
+                                "Milligram" -> stringResource(R.string.unit_milligram)
+                                else -> selectedUnit
+                            }
                             OutlinedTextField(
-                                value = selectedUnit,
+                                value = unitDisplay,
                                 onValueChange = {},
                                 readOnly = true,
-                                label = { Text("Unit") },
+                                label = { Text(stringResource(R.string.unit_label)) },
                                 trailingIcon = { Text("▼", color = TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(end = 4.dp)) },
                                 colors = OutlinedTextFieldDefaults.colors(
                                     unfocusedBorderColor = Color.Gray, focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary
@@ -404,10 +429,15 @@ fun SilverCalculatorScreen(
                             )
                             Box(modifier = Modifier.matchParentSize().clickable { unitDropdownExpanded = true })
                             DropdownMenu(expanded = unitDropdownExpanded, onDismissRequest = { unitDropdownExpanded = false }) {
-                                listOf("Gram" to "Gram (g) ⭐", "Kilogram" to "Kilogram (kg)", "Tola" to "Tola (11.6638 g)", "Ounce" to "Ounce (oz)", "Milligram" to "Milligram (mg)")
-                                    .forEach { (key, label) ->
-                                        DropdownMenuItem(text = { Text(label) }, onClick = { selectedUnit = key; unitDropdownExpanded = false })
-                                    }
+                                listOf(
+                                    "Gram" to stringResource(R.string.unit_gram),
+                                    "Kilogram" to stringResource(R.string.unit_kilogram),
+                                    "Tola" to stringResource(R.string.unit_tola),
+                                    "Ounce" to stringResource(R.string.unit_ounce),
+                                    "Milligram" to stringResource(R.string.unit_milligram)
+                                ).forEach { (key, label) ->
+                                    DropdownMenuItem(text = { Text(label) }, onClick = { selectedUnit = key; unitDropdownExpanded = false })
+                                }
                             }
                         }
                     }
@@ -426,7 +456,7 @@ fun SilverCalculatorScreen(
                                     }
                                 }
                             },
-                            label = { Text(if (isPercentageCharge) "Making Charge (%)" else "Making Charge ($currency)", fontSize = 11.sp) },
+                            label = { Text(if (isPercentageCharge) stringResource(R.string.making_charge_percent) else stringResource(R.string.making_charge_amount, currency), fontSize = 11.sp) },
                             placeholder = { Text("0", color = TextSecondary.copy(alpha = 0.4f)) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             colors = OutlinedTextFieldDefaults.colors(
@@ -449,7 +479,7 @@ fun SilverCalculatorScreen(
                             singleLine = true
                         )
                         Column(modifier = Modifier.weight(1f).padding(bottom = 4.dp)) {
-                            Text("Charge Type", color = TextSecondary, fontSize = 11.sp)
+                            Text(stringResource(R.string.charge_type), color = TextSecondary, fontSize = 11.sp)
                             Spacer(modifier = Modifier.height(4.dp))
                             Row(
                                 modifier = Modifier
@@ -487,7 +517,7 @@ fun SilverCalculatorScreen(
                                     if (newValue.isEmpty() || (num != null && num <= 50.0)) gstInput = newValue
                                 }
                             },
-                            label = { Text("GST (%)") },
+                            label = { Text(stringResource(R.string.gst_percent_label)) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedBorderColor = SilverPrimary, focusedLabelColor = SilverPrimary,
